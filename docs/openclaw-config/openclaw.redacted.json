@@ -1,0 +1,314 @@
+{
+  "agents": {
+    "defaults": {
+      "workspace": "/home/clawd/.openclaw/workspace",
+      "models": {
+        "openai-codex/gpt-5.5": {}
+      },
+      "model": {
+        "primary": "openai-codex/gpt-5.5"
+      }
+    },
+    "list": [
+      {
+        "id": "main"
+      },
+      {
+        "id": "manager",
+        "name": "manager",
+        "workspace": "/home/clawd/.openclaw/workspace/manager",
+        "agentDir": "/home/clawd/.openclaw/agents/manager/agent",
+        "model": "openai-codex/gpt-5.5"
+      },
+      {
+        "id": "frontend",
+        "name": "frontend",
+        "workspace": "/home/clawd/.openclaw/workspace/frontend",
+        "agentDir": "/home/clawd/.openclaw/agents/frontend/agent"
+      },
+      {
+        "id": "backend",
+        "name": "backend",
+        "workspace": "/home/clawd/.openclaw/workspace/backend",
+        "agentDir": "/home/clawd/.openclaw/agents/backend/agent"
+      },
+      {
+        "id": "reviewer",
+        "name": "reviewer",
+        "workspace": "/home/clawd/.openclaw/workspace/reviewer",
+        "agentDir": "/home/clawd/.openclaw/agents/reviewer/agent"
+      },
+      {
+        "id": "prompt",
+        "name": "prompt",
+        "workspace": "/home/clawd/.openclaw/workspace/prompt",
+        "agentDir": "/home/clawd/.openclaw/agents/prompt/agent"
+      },
+      {
+        "id": "tester",
+        "name": "tester",
+        "workspace": "/home/clawd/.openclaw/workspace/tester",
+        "agentDir": "/home/clawd/.openclaw/agents/tester/agent"
+      }
+    ]
+  },
+  "gateway": {
+    "mode": "local",
+    "auth": {
+      "mode": "token",
+      "token": "<REDACTED>"
+    },
+    "port": 18789,
+    "bind": "loopback",
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "controlUi": {
+      "allowInsecureAuth": true
+    },
+    "nodes": {
+      "denyCommands": [
+        "camera.snap",
+        "camera.clip",
+        "screen.record",
+        "contacts.add",
+        "calendar.add",
+        "reminders.add",
+        "sms.send",
+        "sms.search"
+      ]
+    }
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "tools": {
+    "profile": "coding",
+    "web": {
+      "search": {
+        "provider": "duckduckgo",
+        "enabled": true
+      }
+    }
+  },
+  "plugins": {
+    "entries": {
+      "openai": {
+        "enabled": true
+      },
+      "telegram": {
+        "enabled": true
+      },
+      "duckduckgo": {
+        "enabled": true
+      }
+    }
+  },
+  "auth": {
+    "profiles": {
+      "openai-codex:frelikhmax@gmail.com": {
+        "provider": "openai-codex",
+        "mode": "oauth",
+        "email": "frelikhmax@gmail.com"
+      }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      },
+      "botToken": "<REDACTED>",
+      "accounts": {
+        "manager": {
+          "enabled": true,
+          "botToken": "<REDACTED>"
+        }
+      }
+    }
+  },
+  "wizard": {
+    "lastRunAt": "2026-05-11T20:37:43.467Z",
+    "lastRunVersion": "2026.5.7",
+    "lastRunCommand": "doctor",
+    "lastRunMode": "local"
+  },
+  "meta": {
+    "lastTouchedVersion": "2026.5.7",
+    "lastTouchedAt": "2026-05-12T22:35:57.550Z"
+  },
+  "messages": {
+    "groupChat": {
+      "visibleReplies": "message_tool"
+    }
+  },
+  "skills": {
+    "entries": {
+      "1password": {
+        "enabled": false
+      },
+      "apple-notes": {
+        "enabled": false
+      },
+      "apple-reminders": {
+        "enabled": false
+      },
+      "bear-notes": {
+        "enabled": false
+      },
+      "blogwatcher": {
+        "enabled": false
+      },
+      "blucli": {
+        "enabled": false
+      },
+      "bluebubbles": {
+        "enabled": false
+      },
+      "camsnap": {
+        "enabled": false
+      },
+      "clawhub": {
+        "enabled": false
+      },
+      "coding-agent": {
+        "enabled": false
+      },
+      "discord": {
+        "enabled": false
+      },
+      "eightctl": {
+        "enabled": false
+      },
+      "gemini": {
+        "enabled": false
+      },
+      "gh-issues": {
+        "enabled": false
+      },
+      "gifgrep": {
+        "enabled": false
+      },
+      "github": {
+        "enabled": false
+      },
+      "gog": {
+        "enabled": false
+      },
+      "goplaces": {
+        "enabled": false
+      },
+      "himalaya": {
+        "enabled": false
+      },
+      "imsg": {
+        "enabled": false
+      },
+      "mcporter": {
+        "enabled": false
+      },
+      "model-usage": {
+        "enabled": false
+      },
+      "nano-pdf": {
+        "enabled": false
+      },
+      "notion": {
+        "enabled": false
+      },
+      "obsidian": {
+        "enabled": false
+      },
+      "openai-whisper": {
+        "enabled": false
+      },
+      "openai-whisper-api": {
+        "enabled": false
+      },
+      "openhue": {
+        "enabled": false
+      },
+      "oracle": {
+        "enabled": false
+      },
+      "ordercli": {
+        "enabled": false
+      },
+      "peekaboo": {
+        "enabled": false
+      },
+      "sag": {
+        "enabled": false
+      },
+      "session-logs": {
+        "enabled": false
+      },
+      "sherpa-onnx-tts": {
+        "enabled": false
+      },
+      "slack": {
+        "enabled": false
+      },
+      "songsee": {
+        "enabled": false
+      },
+      "sonoscli": {
+        "enabled": false
+      },
+      "spotify-player": {
+        "enabled": false
+      },
+      "summarize": {
+        "enabled": false
+      },
+      "things-mac": {
+        "enabled": false
+      },
+      "tmux": {
+        "enabled": false
+      },
+      "trello": {
+        "enabled": false
+      },
+      "video-frames": {
+        "enabled": false
+      },
+      "voice-call": {
+        "enabled": false
+      },
+      "wacli": {
+        "enabled": false
+      },
+      "xurl": {
+        "enabled": false
+      }
+    }
+  },
+  "commands": {
+    "ownerAllowFrom": [
+      "telegram:7957030047"
+    ]
+  },
+  "bindings": [
+    {
+      "type": "route",
+      "agentId": "prompt",
+      "match": {
+        "channel": "telegram",
+        "accountId": "default"
+      }
+    },
+    {
+      "type": "route",
+      "agentId": "manager",
+      "match": {
+        "channel": "telegram",
+        "accountId": "manager"
+      }
+    }
+  ]
+}
