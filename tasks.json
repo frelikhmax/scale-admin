@@ -1,0 +1,1173 @@
+{
+  "agent_instructions": {
+    "before_start": [
+      "Прочитай этот файл и git log --oneline -20",
+      "Выбери ОДНУ задачу со статусом pending и наивысшим приоритетом",
+      "Проверь, что все dependencies этой задачи имеют статус done"
+    ],
+    "during_work": [
+      "Работай только над выбранной задачей",
+      "Делай коммиты после каждого логического изменения",
+      "Не трогай код, не связанный с текущей задачей"
+    ],
+    "before_finish": [
+      "Выполни ВСЕ test_steps из задачи",
+      "Меняй status на done ТОЛЬКО после успешного прохождения всех тестов",
+      "Напиши summary в progress.md",
+      "ЗАПРЕЩЕНО удалять или редактировать задачи — только менять status"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "category": "infrastructure",
+      "priority": "critical",
+      "description": "Создать базовый monorepo/skeleton проекта с Docker Compose, backend, frontend и PostgreSQL",
+      "acceptance_criteria": [
+        "В репозитории есть отдельные директории для backend и frontend",
+        "Docker Compose поднимает PostgreSQL, backend и frontend",
+        "Backend имеет health endpoint, доступный из браузера или curl",
+        "Frontend запускается и может обратиться к backend health endpoint"
+      ],
+      "test_steps": [
+        "Шаг 1: Запустить docker compose up --build",
+        "Шаг 2: Открыть backend health endpoint или выполнить curl к нему",
+        "Шаг 3: Открыть frontend и проверить, что он показывает успешный статус backend"
+      ],
+      "dependencies": [],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-002",
+      "category": "infrastructure",
+      "priority": "critical",
+      "description": "Настроить конфигурацию окружения и базовую модульную структуру NestJS backend",
+      "acceptance_criteria": [
+        "Backend читает env-переменные через централизованный конфиг",
+        "Критичные env-переменные валидируются при старте приложения",
+        "Созданы пустые модули Auth, Users, Stores, Products, Catalog, Prices, Advertising, Publishing, Scales, Logs, Files и Email",
+        "Backend не стартует с понятной ошибкой при отсутствии обязательного env"
+      ],
+      "test_steps": [
+        "Шаг 1: Запустить backend с корректным .env",
+        "Шаг 2: Убедиться, что приложение стартует без ошибок",
+        "Шаг 3: Временно убрать обязательную env-переменную и проверить, что старт падает с понятным сообщением"
+      ],
+      "dependencies": [
+        "TASK-001"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-003",
+      "category": "infrastructure",
+      "priority": "critical",
+      "description": "Добавить Prisma для auth/access моделей и выполнить первую миграцию",
+      "acceptance_criteria": [
+        "Prisma подключена к PostgreSQL",
+        "В схеме есть User, UserCredential, UserSession, UserInvite, PasswordResetToken, UserStoreAccess и AuditLog",
+        "Уникальность emailNormalized среди неудалённых пользователей обеспечена на уровне базы или сервиса",
+        "Миграция успешно применяется на чистую базу"
+      ],
+      "test_steps": [
+        "Шаг 1: Очистить локальную базу разработки",
+        "Шаг 2: Выполнить prisma migrate dev или аналогичную команду миграции",
+        "Шаг 3: Открыть Prisma Studio или выполнить SQL-запрос и проверить наличие auth/access таблиц"
+      ],
+      "dependencies": [
+        "TASK-002"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-004",
+      "category": "infrastructure",
+      "priority": "critical",
+      "description": "Добавить Prisma-модели бизнес-домена, публикаций, устройств, файлов и sync-логов",
+      "acceptance_criteria": [
+        "В схеме есть Store, StoreCatalog, Product, Category, CatalogProductPlacement, StoreProductPrice, AdvertisingBanner, CatalogVersion, ScaleDevice, ScaleSyncLog и FileAsset",
+        "Заданы связи между магазинами, каталогами, категориями, товарами, ценами, версиями и весами",
+        "Добавлены уникальные ограничения для Store.code, Product.defaultPluCode, ScaleDevice.deviceCode и versionNumber внутри catalogId",
+        "Миграция успешно применяется поверх предыдущей"
+      ],
+      "test_steps": [
+        "Шаг 1: Выполнить миграцию Prisma для бизнес-моделей",
+        "Шаг 2: Проверить, что все таблицы созданы в PostgreSQL",
+        "Шаг 3: Создать тестовые записи Store, StoreCatalog и Product через seed или Prisma Studio"
+      ],
+      "dependencies": [
+        "TASK-003"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-005",
+      "category": "infrastructure",
+      "priority": "critical",
+      "description": "Добавить seed-скрипт для первого admin-пользователя и минимальных тестовых данных",
+      "acceptance_criteria": [
+        "Seed создаёт admin-пользователя с credential-записью и безопасно хешированным паролем",
+        "Seed можно запускать повторно без создания дублей",
+        "Опционально создаются примерный магазин, активный каталог и несколько товаров для ручной проверки",
+        "Секреты seed-пользователя берутся из env или явно документированы для локальной разработки"
+      ],
+      "test_steps": [
+        "Шаг 1: Выполнить seed на чистой базе",
+        "Шаг 2: Повторно выполнить seed и убедиться, что дублей нет",
+        "Шаг 3: Проверить через Prisma Studio наличие admin-пользователя и базовых тестовых данных"
+      ],
+      "dependencies": [
+        "TASK-004"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-006",
+      "category": "integration",
+      "priority": "high",
+      "description": "Настроить frontend API layer на TypeScript и RTK Query для обращения к backend",
+      "acceptance_criteria": [
+        "Frontend имеет единый API client/baseQuery для backend",
+        "Cookies отправляются при запросах к backend",
+        "Реализована базовая обработка ошибок 401, 403 и сетевых ошибок",
+        "Health endpoint backend вызывается через RTK Query"
+      ],
+      "test_steps": [
+        "Шаг 1: Запустить frontend и backend через Docker Compose",
+        "Шаг 2: Открыть страницу frontend с проверкой health endpoint",
+        "Шаг 3: Временно остановить backend и проверить, что frontend показывает понятное состояние ошибки"
+      ],
+      "dependencies": [
+        "TASK-001"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-007",
+      "category": "security",
+      "priority": "critical",
+      "description": "Реализовать login/logout с cookie-based server-side sessions и безопасным хранением session token hash",
+      "acceptance_criteria": [
+        "Пользователь может войти по email и password",
+        "Неверный пароль не создаёт сессию",
+        "Blocked user не может войти",
+        "Session token хранится в базе только как hash",
+        "Cookie имеет HttpOnly, SameSite=Lax или Strict и Secure в production",
+        "Logout заполняет revokedAt у активной сессии",
+        "Поддержаны idle timeout и absolute timeout"
+      ],
+      "test_steps": [
+        "Шаг 1: Войти под seed admin с корректным паролем",
+        "Шаг 2: Проверить в devtools, что cookie HttpOnly и имеет корректные атрибуты",
+        "Шаг 3: Выполнить logout и убедиться, что защищённый endpoint больше не доступен",
+        "Шаг 4: Попробовать войти с неверным паролем и blocked-пользователем, ожидая отказ"
+      ],
+      "dependencies": [
+        "TASK-005"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-008",
+      "category": "security",
+      "priority": "critical",
+      "description": "Реализовать session guard, RBAC guard и проверку доступа operator к назначенным магазинам",
+      "acceptance_criteria": [
+        "Protected endpoints требуют валидную активную session",
+        "Admin имеет доступ ко всем магазинам и админским endpoints",
+        "Operator получает доступ только к магазинам с активным UserStoreAccess",
+        "Frontend-only скрытие UI не является единственной защитой",
+        "После изменения permission session id регенерируется или старая сессия отзывается"
+      ],
+      "test_steps": [
+        "Шаг 1: Создать admin и operator с доступом только к одному магазину",
+        "Шаг 2: Отправить backend-запрос operator к назначенному магазину и получить успех",
+        "Шаг 3: Отправить backend-запрос operator к чужому магазину и получить 403",
+        "Шаг 4: Проверить, что admin получает доступ к обоим магазинам"
+      ],
+      "dependencies": [
+        "TASK-007"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-009",
+      "category": "security",
+      "priority": "high",
+      "description": "Добавить CSRF-защиту и rate limiting для web auth endpoints",
+      "acceptance_criteria": [
+        "Все state-changing web endpoints требуют CSRF token или эквивалентную защиту",
+        "State-changing операции не используют GET",
+        "Login, password reset и invite accept имеют rate limiting",
+        "Повторные неуспешные login попытки временно блокируют или задерживают вход",
+        "CSRF и rate limit ошибки возвращаются в понятном формате API"
+      ],
+      "test_steps": [
+        "Шаг 1: Выполнить POST state-changing запроса без CSRF token и получить отказ",
+        "Шаг 2: Повторить запрос с валидным CSRF token и получить успех",
+        "Шаг 3: Сделать серию неверных login попыток и проверить временную блокировку или задержку",
+        "Шаг 4: Убедиться, что GET endpoints не меняют состояние"
+      ],
+      "dependencies": [
+        "TASK-007"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-010",
+      "category": "functional",
+      "priority": "high",
+      "description": "Реализовать invite flow для создания пользователей через приглашения",
+      "acceptance_criteria": [
+        "Admin может создать invite с email, role и expiresAt",
+        "Invite token хранится только как hash",
+        "Invited user может принять приглашение и задать пароль",
+        "Просроченное приглашение нельзя принять",
+        "Уже принятое приглашение нельзя принять повторно",
+        "Создание и принятие invite логируются в AuditLog"
+      ],
+      "test_steps": [
+        "Шаг 1: Под admin создать invite для нового operator",
+        "Шаг 2: Принять invite по токену и задать пароль",
+        "Шаг 3: Войти новым пользователем",
+        "Шаг 4: Повторно открыть тот же invite и проверить отказ",
+        "Шаг 5: Создать просроченный invite и проверить отказ при принятии"
+      ],
+      "dependencies": [
+        "TASK-008",
+        "TASK-009"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-011",
+      "category": "functional",
+      "priority": "high",
+      "description": "Реализовать password reset flow с одноразовыми expiring token hash",
+      "acceptance_criteria": [
+        "Пользователь может запросить сброс пароля по email",
+        "Password reset token хранится только как hash",
+        "Токен нельзя использовать после expiresAt",
+        "Токен нельзя использовать повторно",
+        "После смены пароля обновляется passwordChangedAt",
+        "Активные сессии пользователя отзываются или становятся недействительными после смены пароля"
+      ],
+      "test_steps": [
+        "Шаг 1: Запросить password reset для существующего пользователя",
+        "Шаг 2: Использовать полученный локально или через тестовый SMTP token для смены пароля",
+        "Шаг 3: Войти с новым паролем и убедиться, что старый пароль не работает",
+        "Шаг 4: Повторно использовать тот же token и получить отказ",
+        "Шаг 5: Проверить отказ для просроченного token"
+      ],
+      "dependencies": [
+        "TASK-009"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-012",
+      "category": "functional",
+      "priority": "high",
+      "description": "Реализовать admin CRUD для пользователей, ролей, block и soft delete",
+      "acceptance_criteria": [
+        "Admin видит список пользователей с ролями и статусами",
+        "Admin может менять роль пользователя между admin и operator",
+        "Admin может блокировать пользователя",
+        "Admin может выполнить soft delete через deletedAt",
+        "Blocked или deleted пользователь не может войти",
+        "Все изменения пользователей пишутся в AuditLog"
+      ],
+      "test_steps": [
+        "Шаг 1: Под admin открыть список пользователей через API",
+        "Шаг 2: Изменить роль тестового пользователя и проверить новое значение",
+        "Шаг 3: Заблокировать пользователя и проверить, что login запрещён",
+        "Шаг 4: Выполнить soft delete и убедиться, что пользователь исключён из активного списка",
+        "Шаг 5: Проверить AuditLog по всем операциям"
+      ],
+      "dependencies": [
+        "TASK-008"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-013",
+      "category": "functional",
+      "priority": "high",
+      "description": "Реализовать управление доступами operator к магазинам",
+      "acceptance_criteria": [
+        "Admin может назначить operator доступ к магазину",
+        "Admin может отозвать доступ, заполнив revokedAt",
+        "Нельзя создать дубль активного доступа userId + storeId",
+        "Operator видит только магазины с активным доступом",
+        "Выдача и отзыв доступа пишутся в AuditLog"
+      ],
+      "test_steps": [
+        "Шаг 1: Назначить operator доступ к магазину",
+        "Шаг 2: Проверить, что operator видит этот магазин в API",
+        "Шаг 3: Повторно назначить тот же доступ и получить отказ или idempotent-результат без дубля",
+        "Шаг 4: Отозвать доступ и проверить, что operator больше не видит магазин",
+        "Шаг 5: Проверить AuditLog по выдаче и отзыву"
+      ],
+      "dependencies": [
+        "TASK-008"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-014",
+      "category": "ui",
+      "priority": "high",
+      "description": "Создать Login UI, logout и frontend session state",
+      "acceptance_criteria": [
+        "Пользователь может войти через форму Login",
+        "Ошибки неверного пароля и blocked user отображаются понятно",
+        "После login пользователь попадает в Dashboard",
+        "Logout очищает frontend session state и вызывает backend logout",
+        "Protected frontend routes требуют активной сессии"
+      ],
+      "test_steps": [
+        "Шаг 1: Открыть frontend без сессии и убедиться, что показывается Login",
+        "Шаг 2: Войти корректными admin-учётными данными",
+        "Шаг 3: Нажать logout и проверить возврат на Login",
+        "Шаг 4: Ввести неверный пароль и проверить сообщение об ошибке"
+      ],
+      "dependencies": [
+        "TASK-006",
+        "TASK-007"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-015",
+      "category": "ui",
+      "priority": "medium",
+      "description": "Создать Users & Access UI для приглашений, ролей, блокировки и назначений магазинов",
+      "acceptance_criteria": [
+        "Admin видит страницу Users & Access",
+        "Admin может создать invite через UI",
+        "Admin может изменить роль и заблокировать пользователя через UI",
+        "Admin может назначить и отозвать доступ operator к магазину",
+        "Operator не видит Users & Access в навигации и получает отказ при прямом открытии"
+      ],
+      "test_steps": [
+        "Шаг 1: Под admin открыть Users & Access",
+        "Шаг 2: Создать invite и проверить появление записи",
+        "Шаг 3: Назначить operator магазин и проверить отображение доступа",
+        "Шаг 4: Отозвать доступ и проверить обновление UI",
+        "Шаг 5: Под operator попытаться открыть страницу напрямую и проверить отказ"
+      ],
+      "dependencies": [
+        "TASK-010",
+        "TASK-012",
+        "TASK-013",
+        "TASK-014"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-016",
+      "category": "functional",
+      "priority": "high",
+      "description": "Реализовать Store CRUD с авто-созданием основного active-каталога",
+      "acceptance_criteria": [
+        "Admin может создать магазин с code, name, address, timezone и status",
+        "Store.code уникален",
+        "Admin может редактировать магазин",
+        "При создании active-магазина создаётся основной active StoreCatalog",
+        "Operator не может создавать и редактировать магазины",
+        "Создание и изменение магазина пишутся в AuditLog"
+      ],
+      "test_steps": [
+        "Шаг 1: Под admin создать active-магазин через API",
+        "Шаг 2: Проверить, что создан StoreCatalog со статусом active",
+        "Шаг 3: Попробовать создать магазин с тем же code и получить отказ",
+        "Шаг 4: Под operator попробовать создать магазин и получить 403",
+        "Шаг 5: Проверить AuditLog по созданию и редактированию"
+      ],
+      "dependencies": [
+        "TASK-008",
+        "TASK-004"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-017",
+      "category": "ui",
+      "priority": "high",
+      "description": "Создать Stores UI и базовую навигацию Admin/Operator",
+      "acceptance_criteria": [
+        "Admin видит список всех магазинов",
+        "Admin может открыть форму создания и редактирования магазина",
+        "Operator видит только назначенные магазины",
+        "Навигация отличается для admin и operator",
+        "Есть переход из списка магазинов в Store Details"
+      ],
+      "test_steps": [
+        "Шаг 1: Под admin открыть Stores и проверить отображение всех магазинов",
+        "Шаг 2: Создать магазин через UI и проверить появление в списке",
+        "Шаг 3: Под operator открыть Stores и проверить только назначенные магазины",
+        "Шаг 4: Нажать на магазин и попасть в Store Details"
+      ],
+      "dependencies": [
+        "TASK-014",
+        "TASK-016",
+        "TASK-013"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-018",
+      "category": "functional",
+      "priority": "high",
+      "description": "Реализовать Store Details API с active catalog, overview и access checks",
+      "acceptance_criteria": [
+        "Backend возвращает Store Details с active StoreCatalog",
+        "Store Details включает базовый overview магазина и currentVersionId каталога",
+        "Admin может открыть любой магазин",
+        "Operator может открыть только назначенный магазин",
+        "Весы и логи пока могут возвращаться пустыми секциями, если соответствующие модули не готовы"
+      ],
+      "test_steps": [
+        "Шаг 1: Под admin запросить Store Details любого магазина и получить данные",
+        "Шаг 2: Под operator запросить назначенный магазин и получить данные",
+        "Шаг 3: Под operator запросить чужой магазин и получить 403",
+        "Шаг 4: Проверить, что в ответе есть active catalog"
+      ],
+      "dependencies": [
+        "TASK-016"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-019",
+      "category": "security",
+      "priority": "high",
+      "description": "Реализовать регистрацию, блокировку и перевыпуск apiToken для ScaleDevice",
+      "acceptance_criteria": [
+        "Admin может зарегистрировать весы для магазина",
+        "deviceCode уникален",
+        "apiToken показывается только один раз при создании или regeneration",
+        "В базе хранится только apiTokenHash",
+        "Admin может заблокировать или деактивировать весы",
+        "Regeneration старого token делает старый token недействительным",
+        "Операции с устройствами пишутся в AuditLog без секретов"
+      ],
+      "test_steps": [
+        "Шаг 1: Под admin создать ScaleDevice и сохранить показанный apiToken",
+        "Шаг 2: Проверить в базе, что plain apiToken не хранится",
+        "Шаг 3: Заблокировать устройство и проверить статус",
+        "Шаг 4: Выполнить regeneration token и убедиться, что новый token показан один раз",
+        "Шаг 5: Проверить AuditLog и отсутствие secret-значений в логах"
+      ],
+      "dependencies": [
+        "TASK-016",
+        "TASK-008"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-020",
+      "category": "ui",
+      "priority": "medium",
+      "description": "Создать Scale Devices tab в Store Details",
+      "acceptance_criteria": [
+        "Admin видит список весов магазина с deviceCode, name, model, status, lastSeenAt, lastSyncAt и currentCatalogVersionId",
+        "Admin может зарегистрировать новое устройство через UI",
+        "Новый apiToken показывается пользователю только сразу после создания",
+        "Admin может заблокировать устройство и перевыпустить token",
+        "Operator видит только простой статус устройств без управления, если доступ к вкладке разрешён"
+      ],
+      "test_steps": [
+        "Шаг 1: Под admin открыть Store Details -> Scale Devices",
+        "Шаг 2: Зарегистрировать устройство и скопировать показанный token",
+        "Шаг 3: Обновить страницу и убедиться, что token больше не отображается",
+        "Шаг 4: Заблокировать устройство и проверить обновление статуса",
+        "Шаг 5: Под operator проверить отсутствие admin-действий"
+      ],
+      "dependencies": [
+        "TASK-017",
+        "TASK-019",
+        "TASK-018"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-021",
+      "category": "functional",
+      "priority": "high",
+      "description": "Реализовать Product master catalog CRUD, поиск, validation и audit",
+      "acceptance_criteria": [
+        "Admin и operator могут создавать и редактировать товары",
+        "Нельзя создать товар без defaultPluCode, name, shortName, unit и status",
+        "defaultPluCode уникален",
+        "Поиск работает по name, shortName, defaultPluCode, sku и barcode",
+        "Archived-товар помечается как недоступный для новых active-размещений",
+        "При редактировании товара, используемого в каталогах, API возвращает warning или требует подтверждение",
+        "Создание и изменение товара пишутся в AuditLog"
+      ],
+      "test_steps": [
+        "Шаг 1: Создать товар с обязательными полями и проверить успешный ответ",
+        "Шаг 2: Попробовать создать товар без shortName и получить validation error",
+        "Шаг 3: Попробовать создать второй товар с тем же defaultPluCode и получить отказ",
+        "Шаг 4: Найти товар по name, PLU, sku и barcode",
+        "Шаг 5: Отредактировать используемый товар и проверить warning/confirmation flow",
+        "Шаг 6: Проверить AuditLog изменений"
+      ],
+      "dependencies": [
+        "TASK-008",
+        "TASK-004"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-022",
+      "category": "ui",
+      "priority": "medium",
+      "description": "Создать Products page с таблицей, поиском и формами создания/редактирования товара",
+      "acceptance_criteria": [
+        "Страница Products доступна admin и operator",
+        "Таблица отображает PLU, name, shortName, sku, barcode, unit и status",
+        "Поиск работает по ключевым полям товара",
+        "Форма создания валидирует обязательные поля",
+        "При редактировании используемого товара показывается предупреждение"
+      ],
+      "test_steps": [
+        "Шаг 1: Открыть Products и создать товар через UI",
+        "Шаг 2: Найти товар по PLU и названию",
+        "Шаг 3: Отредактировать товар и убедиться, что изменения отображаются",
+        "Шаг 4: Попробовать сохранить форму без обязательного поля и проверить ошибку",
+        "Шаг 5: Отредактировать используемый товар и проверить предупреждение"
+      ],
+      "dependencies": [
+        "TASK-014",
+        "TASK-021"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-023",
+      "category": "functional",
+      "priority": "high",
+      "description": "Реализовать Category CRUD, дерево, sortOrder и validation внутри StoreCatalog",
+      "acceptance_criteria": [
+        "Пользователь с доступом к магазину может создать root-категорию",
+        "Пользователь может создать child-категорию в пределах лимита глубины 2–3 уровня",
+        "parentId может ссылаться только на категорию того же catalogId",
+        "Циклы категорий запрещены",
+        "sortOrder сохраняется среди категорий одного уровня",
+        "Archived-категория не может использоваться для новых active-размещений",
+        "Изменения категорий пишутся в AuditLog"
+      ],
+      "test_steps": [
+        "Шаг 1: Создать root-категорию в active catalog магазина",
+        "Шаг 2: Создать child-категорию и проверить parentId",
+        "Шаг 3: Попробовать выбрать parent из другого catalogId и получить отказ",
+        "Шаг 4: Попробовать создать цикл и получить отказ",
+        "Шаг 5: Изменить порядок категорий и проверить сохранение sortOrder",
+        "Шаг 6: Проверить AuditLog изменений"
+      ],
+      "dependencies": [
+        "TASK-018"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-024",
+      "category": "ui",
+      "priority": "medium",
+      "description": "Создать Catalog tab для управления деревом категорий",
+      "acceptance_criteria": [
+        "В Store Details есть Catalog tab",
+        "Пользователь видит дерево категорий active catalog",
+        "Пользователь может создать root и child-категорию",
+        "Пользователь может менять порядок категорий",
+        "UI показывает ошибки при превышении глубины, чужом parentId или попытке цикла",
+        "При архивировании категории с активными товарами показывается предупреждение"
+      ],
+      "test_steps": [
+        "Шаг 1: Открыть Store Details -> Catalog",
+        "Шаг 2: Создать root-категорию и child-категорию",
+        "Шаг 3: Изменить порядок категорий и обновить страницу",
+        "Шаг 4: Попробовать недопустимое действие и проверить ошибку",
+        "Шаг 5: Архивировать категорию с товарами и проверить предупреждение"
+      ],
+      "dependencies": [
+        "TASK-017",
+        "TASK-023"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-025",
+      "category": "functional",
+      "priority": "high",
+      "description": "Реализовать CatalogProductPlacement CRUD, перемещение товаров и ограничения active-размещений",
+      "acceptance_criteria": [
+        "Можно добавить active Product из справочника в active Category active catalog",
+        "categoryId должен принадлежать тому же catalogId",
+        "Archived product нельзя добавить в active-placement",
+        "Archived category нельзя использовать для active-placement",
+        "В MVP один productId может иметь только одно active-размещение в одном catalogId",
+        "Повторное добавление товара возвращает сценарий перемещения существующего placement",
+        "sortOrder товаров внутри категории сохраняется",
+        "Размещение и перемещение пишутся в AuditLog"
+      ],
+      "test_steps": [
+        "Шаг 1: Добавить active-товар в active-категорию",
+        "Шаг 2: Попробовать добавить тот же товар в другую категорию того же каталога и проверить предложение перемещения",
+        "Шаг 3: Выполнить перемещение и проверить изменение categoryId",
+        "Шаг 4: Попробовать добавить archived-товар и получить отказ",
+        "Шаг 5: Попробовать добавить товар в archived-категорию и получить отказ",
+        "Шаг 6: Изменить sortOrder и проверить сохранение порядка"
+      ],
+      "dependencies": [
+        "TASK-021",
+        "TASK-023"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-026",
+      "category": "ui",
+      "priority": "medium",
+      "description": "Расширить Catalog tab UI для добавления, перемещения и сортировки товаров в категориях",
+      "acceptance_criteria": [
+        "Пользователь может искать товар из справочника и добавить его в категорию",
+        "Товары отображаются внутри выбранной категории в порядке sortOrder",
+        "При повторном добавлении товара UI предлагает переместить существующее размещение",
+        "Archived-товары и archived-категории нельзя выбрать для active-размещения",
+        "Пользователь может менять порядок товаров внутри категории"
+      ],
+      "test_steps": [
+        "Шаг 1: Открыть Catalog tab и выбрать категорию",
+        "Шаг 2: Найти товар и добавить в категорию",
+        "Шаг 3: Добавить тот же товар в другую категорию и подтвердить перемещение",
+        "Шаг 4: Изменить порядок товаров и обновить страницу",
+        "Шаг 5: Проверить, что archived-сущности недоступны для выбора"
+      ],
+      "dependencies": [
+        "TASK-024",
+        "TASK-025"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-027",
+      "category": "functional",
+      "priority": "high",
+      "description": "Реализовать StoreProductPrice API для цен магазина с validation и audit",
+      "acceptance_criteria": [
+        "Цена задаётся для пары storeId + productId",
+        "В MVP существует только одна active-цена на товар в магазине",
+        "Product не хранит цену и не изменяется при изменении цены",
+        "price должен быть больше 0",
+        "currency по умолчанию RUB",
+        "API отдаёт список товаров active catalog с текущими ценами, категорией и признаком отсутствия цены",
+        "Изменение цены пишется в AuditLog"
+      ],
+      "test_steps": [
+        "Шаг 1: Запросить Prices API для магазина с размещёнными товарами",
+        "Шаг 2: Установить цену товару и проверить StoreProductPrice",
+        "Шаг 3: Проверить, что Product не изменился",
+        "Шаг 4: Попробовать установить price <= 0 и получить validation error",
+        "Шаг 5: Проверить AuditLog изменения цены"
+      ],
+      "dependencies": [
+        "TASK-025"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-028",
+      "category": "ui",
+      "priority": "high",
+      "description": "Создать Prices tab с таблицей товаров, фильтрами и inline-редактированием цены",
+      "acceptance_criteria": [
+        "Prices tab отображает товары active catalog выбранного магазина",
+        "Колонки включают Product name, Short name, PLU, SKU/barcode, Category, Current price, Unit, Status и UpdatedAt",
+        "Поиск работает по name, shortName, defaultPluCode, sku и barcode",
+        "Есть фильтр по категории и фильтр без цены",
+        "Inline-редактирование сохраняет цену магазина",
+        "Товары без цены и некорректные цены подсвечиваются"
+      ],
+      "test_steps": [
+        "Шаг 1: Открыть Store Details -> Prices",
+        "Шаг 2: Проверить отображение размещённых товаров и колонок",
+        "Шаг 3: Найти товар поиском и отфильтровать по категории",
+        "Шаг 4: Включить фильтр без цены и проверить подсветку",
+        "Шаг 5: Изменить цену inline и обновить страницу",
+        "Шаг 6: Проверить, что цена сохранилась"
+      ],
+      "dependencies": [
+        "TASK-017",
+        "TASK-027"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-029",
+      "category": "security",
+      "priority": "high",
+      "description": "Реализовать FileAsset и local image upload с server-side validation",
+      "acceptance_criteria": [
+        "Авторизованный пользователь может загрузить jpg, png или webp изображение",
+        "Файлы больше 2 МБ отклоняются",
+        "Backend проверяет extension и фактический тип файла, не доверяя только Content-Type",
+        "Файлы сохраняются с server-generated filenames",
+        "Frontend/API получает publicUrl после успешной загрузки",
+        "Upload action пишется в AuditLog",
+        "Физическое удаление файла, использованного в опубликованной версии, не выполняется сразу"
+      ],
+      "test_steps": [
+        "Шаг 1: Загрузить валидный webp-файл меньше 2 МБ и получить publicUrl",
+        "Шаг 2: Загрузить файл неподдерживаемого формата и получить отказ",
+        "Шаг 3: Загрузить файл больше 2 МБ и получить отказ",
+        "Шаг 4: Проверить, что имя файла на диске не совпадает с исходным пользовательским именем",
+        "Шаг 5: Проверить FileAsset и AuditLog запись"
+      ],
+      "dependencies": [
+        "TASK-008",
+        "TASK-004"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-030",
+      "category": "integration",
+      "priority": "medium",
+      "description": "Интегрировать product image upload с Product.imageUrl в API и UI",
+      "acceptance_criteria": [
+        "В форме товара можно загрузить изображение через Files API",
+        "После загрузки Product.imageUrl сохраняет publicUrl",
+        "Product imageUrl можно заменить при редактировании товара",
+        "Невалидные файлы показывают ошибку в UI",
+        "Изменение imageUrl товара логируется как изменение товара"
+      ],
+      "test_steps": [
+        "Шаг 1: Открыть форму создания товара и загрузить валидное изображение",
+        "Шаг 2: Сохранить товар и проверить отображение imageUrl",
+        "Шаг 3: Заменить изображение товара и проверить новое значение",
+        "Шаг 4: Попробовать загрузить .gif или файл больше 2 МБ и проверить ошибку"
+      ],
+      "dependencies": [
+        "TASK-022",
+        "TASK-029"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-031",
+      "category": "functional",
+      "priority": "high",
+      "description": "Реализовать AdvertisingBanner CRUD, статус и порядок баннеров магазина",
+      "acceptance_criteria": [
+        "Баннер создаётся на уровне storeId",
+        "imageUrl обязателен",
+        "Поддерживаются статусы active, inactive и archived",
+        "sortOrder определяет порядок показа active-баннеров",
+        "В API возвращаются только баннеры выбранного магазина с учётом доступа пользователя",
+        "Изменения баннеров пишутся в AuditLog"
+      ],
+      "test_steps": [
+        "Шаг 1: Создать баннер магазина с imageUrl",
+        "Шаг 2: Попробовать создать баннер без imageUrl и получить validation error",
+        "Шаг 3: Создать несколько active-баннеров и изменить sortOrder",
+        "Шаг 4: Проверить сохранение порядка",
+        "Шаг 5: Под operator без доступа к магазину запросить баннеры и получить 403",
+        "Шаг 6: Проверить AuditLog"
+      ],
+      "dependencies": [
+        "TASK-018",
+        "TASK-029"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-032",
+      "category": "ui",
+      "priority": "medium",
+      "description": "Создать Advertising tab для загрузки, статусов и сортировки баннеров",
+      "acceptance_criteria": [
+        "В Store Details есть Advertising tab",
+        "Пользователь может загрузить banner image и создать баннер",
+        "Неподдерживаемый формат и файл больше 2 МБ отображают ошибку",
+        "Пользователь может менять status баннера",
+        "Пользователь может менять порядок баннеров",
+        "UI показывает, что изменение баннеров требует новой публикации"
+      ],
+      "test_steps": [
+        "Шаг 1: Открыть Advertising tab",
+        "Шаг 2: Загрузить валидный banner image и создать баннер",
+        "Шаг 3: Попробовать загрузить невалидный файл и проверить ошибку",
+        "Шаг 4: Изменить порядок баннеров и обновить страницу",
+        "Шаг 5: Изменить статус баннера и проверить отметку о необходимости публикации"
+      ],
+      "dependencies": [
+        "TASK-017",
+        "TASK-031"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-033",
+      "category": "functional",
+      "priority": "critical",
+      "description": "Реализовать Catalog validation service для проверки перед публикацией",
+      "acceptance_criteria": [
+        "Пользователь с правом на магазин может запустить проверку каталога",
+        "Сервис возвращает blocking errors и warnings отдельно",
+        "Проверяются товары без цены, дубли PLU, archived product в active-placement, active-placement в archived category",
+        "Проверяются несуществующие product/category ссылки, сломанное дерево, циклы и parentId вне catalogId",
+        "Проверяются shortName/defaultPluCode товаров, обязательные названия категорий, shortName категорий и sortOrder",
+        "Проверяются невалидные active advertising banners",
+        "Blocking errors запрещают публикацию, но сама validation не создаёт CatalogVersion"
+      ],
+      "test_steps": [
+        "Шаг 1: Создать валидный каталог с категорией, товаром, ценой и баннером",
+        "Шаг 2: Запустить validation и получить отсутствие blocking errors",
+        "Шаг 3: Удалить цену у active-размещённого товара и получить blocking error",
+        "Шаг 4: Создать broken tree или archived-category placement и получить blocking error",
+        "Шаг 5: Создать warning-ситуацию и проверить, что публикация потенциально разрешена"
+      ],
+      "dependencies": [
+        "TASK-027",
+        "TASK-031"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-034",
+      "category": "functional",
+      "priority": "critical",
+      "description": "Реализовать generation packageData snapshot и packageChecksum для публикации",
+      "acceptance_criteria": [
+        "packageData собирается только из active-категорий, active-размещений, active-товаров, active-цен и active-баннеров",
+        "Структура packageData содержит version, store, catalog, categories с items и children, advertising.banners",
+        "Весы не получают внутреннюю структуру таблиц базы",
+        "Категории, товары и баннеры отсортированы по sortOrder",
+        "packageChecksum рассчитывается по финальному содержимому пакета",
+        "Генерация не изменяет рабочие таблицы"
+      ],
+      "test_steps": [
+        "Шаг 1: Подготовить каталог с несколькими категориями, товарами, ценами и баннерами",
+        "Шаг 2: Запустить generation service в тестовом endpoint или unit/integration тесте",
+        "Шаг 3: Проверить, что packageData содержит нужные секции и не содержит inactive/archived сущности",
+        "Шаг 4: Проверить порядок по sortOrder",
+        "Шаг 5: Повторно сгенерировать пакет без изменений и проверить стабильность checksum"
+      ],
+      "dependencies": [
+        "TASK-033"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-035",
+      "category": "functional",
+      "priority": "critical",
+      "description": "Реализовать атомарную публикацию CatalogVersion и обновление StoreCatalog.currentVersionId",
+      "acceptance_criteria": [
+        "Публикация проверяет права пользователя на магазин",
+        "Публикация останавливается при blocking errors",
+        "Успешная публикация создаёт новую immutable CatalogVersion",
+        "versionNumber уникален и увеличивается внутри catalogId",
+        "StoreCatalog.currentVersionId обновляется только после успешного создания версии",
+        "Rollback оставляет предыдущий currentVersionId при ошибке",
+        "CatalogVersion.packageData нельзя изменить через обычные API",
+        "Публикация пишется в AuditLog"
+      ],
+      "test_steps": [
+        "Шаг 1: Запустить публикацию валидного каталога и получить новую версию",
+        "Шаг 2: Проверить CatalogVersion.packageData, packageChecksum и versionNumber",
+        "Шаг 3: Проверить обновление StoreCatalog.currentVersionId",
+        "Шаг 4: Создать blocking error и убедиться, что версия не создаётся",
+        "Шаг 5: Смоделировать ошибку после создания версии в тесте и проверить rollback currentVersionId",
+        "Шаг 6: Попробовать изменить опубликованную версию через API и получить отказ"
+      ],
+      "dependencies": [
+        "TASK-034"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-036",
+      "category": "ui",
+      "priority": "high",
+      "description": "Создать Versions / Publishing tab с проверкой, ошибками, предупреждениями и историей версий",
+      "acceptance_criteria": [
+        "Пользователь может запустить validation из UI",
+        "Blocking errors и warnings отображаются раздельно и понятно",
+        "Кнопка Publish недоступна при blocking errors",
+        "Успешная публикация отображает новую версию и дату публикации",
+        "История версий показывает versionNumber, publishedAt, publishedBy и checksum",
+        "UI объясняет, что изменения после публикации требуют новой версии"
+      ],
+      "test_steps": [
+        "Шаг 1: Открыть Store Details -> Versions / Publishing",
+        "Шаг 2: Запустить проверку валидного каталога",
+        "Шаг 3: Опубликовать версию и проверить появление в истории",
+        "Шаг 4: Создать товар без цены и повторно запустить проверку",
+        "Шаг 5: Проверить, что Publish заблокирован и ошибка понятна пользователю"
+      ],
+      "dependencies": [
+        "TASK-017",
+        "TASK-035"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-037",
+      "category": "security",
+      "priority": "critical",
+      "description": "Реализовать безопасность Scale API: deviceCode + apiToken auth и rate limiting",
+      "acceptance_criteria": [
+        "Scale API принимает deviceCode и plain apiToken от устройства",
+        "Backend сравнивает token только с apiTokenHash",
+        "Неверный token возвращает ошибку авторизации",
+        "Blocked/inactive scale не получает пакет",
+        "Scale API endpoints имеют rate limiting",
+        "Auth failures пишутся в ScaleSyncLog или AuditLog без секретов"
+      ],
+      "test_steps": [
+        "Шаг 1: Вызвать Scale API с корректным deviceCode и apiToken и получить авторизованный результат",
+        "Шаг 2: Вызвать с неверным token и получить 401/403",
+        "Шаг 3: Заблокировать устройство и проверить отказ",
+        "Шаг 4: Сделать серию частых запросов и проверить rate limiting",
+        "Шаг 5: Проверить, что plain token не появился в логах"
+      ],
+      "dependencies": [
+        "TASK-019",
+        "TASK-035"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-038",
+      "category": "integration",
+      "priority": "critical",
+      "description": "Реализовать POST /api/scales/check-update с выдачей full package inline и sync logs",
+      "acceptance_criteria": [
+        "Зарегистрированные весы могут проверить обновления",
+        "Если currentCatalogVersionId совпадает с currentVersionId магазина, ответ содержит hasUpdate false",
+        "Если версия отличается, ответ содержит hasUpdate true, versionId, versionNumber, packageChecksum и packageData",
+        "lastSeenAt обновляется при успешном обращении",
+        "Каждый check-update создаёт ScaleSyncLog со статусом no_update, update_available или package_delivered",
+        "Неопубликованные рабочие изменения не попадают в packageData"
+      ],
+      "test_steps": [
+        "Шаг 1: Зарегистрировать устройство и опубликовать версию каталога магазина",
+        "Шаг 2: Вызвать check-update с currentCatalogVersionId = null и получить full package",
+        "Шаг 3: Вызвать check-update с currentCatalogVersionId равным текущей версии и получить hasUpdate false",
+        "Шаг 4: Изменить рабочие данные без публикации и проверить, что check-update не отдаёт их как новую версию",
+        "Шаг 5: Проверить lastSeenAt и ScaleSyncLog"
+      ],
+      "dependencies": [
+        "TASK-037"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-039",
+      "category": "integration",
+      "priority": "critical",
+      "description": "Реализовать POST /api/scales/ack с обновлением currentCatalogVersionId только при success",
+      "acceptance_criteria": [
+        "ACK принимает deviceCode, apiToken, versionId, status и errorMessage",
+        "status success обновляет ScaleDevice.currentCatalogVersionId",
+        "status success обновляет lastSyncAt",
+        "status error не обновляет currentCatalogVersionId",
+        "Каждый ACK создаёт ScaleSyncLog со статусом ack_received или error",
+        "Successful ACK пишется в AuditLog или соответствующий системный лог без actorUserId"
+      ],
+      "test_steps": [
+        "Шаг 1: Получить package через check-update",
+        "Шаг 2: Отправить ACK success по versionId",
+        "Шаг 3: Проверить currentCatalogVersionId и lastSyncAt устройства",
+        "Шаг 4: Опубликовать новую версию и отправить ACK error",
+        "Шаг 5: Проверить, что currentCatalogVersionId не изменился, а error записан в ScaleSyncLog"
+      ],
+      "dependencies": [
+        "TASK-038"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-040",
+      "category": "ui",
+      "priority": "high",
+      "description": "Добавить статус синхронизации весов в Store Details и Versions UI",
+      "acceptance_criteria": [
+        "Store Details показывает текущую опубликованную версию магазина",
+        "Для каждого устройства показаны currentCatalogVersionId, lastSeenAt, lastSyncAt и наличие ошибки",
+        "Устройства, не подтвердившие текущую версию, подсвечиваются",
+        "Ошибочные sync statuses отображаются понятно",
+        "Operator видит простой статус публикации и синхронизации доступного магазина"
+      ],
+      "test_steps": [
+        "Шаг 1: Опубликовать версию и открыть Store Details",
+        "Шаг 2: Проверить, что устройство без ACK подсвечено как не обновлённое",
+        "Шаг 3: Отправить ACK success и обновить страницу",
+        "Шаг 4: Проверить, что устройство отображается как обновлённое",
+        "Шаг 5: Отправить ACK error для другого устройства и проверить ошибочный статус"
+      ],
+      "dependencies": [
+        "TASK-039",
+        "TASK-020",
+        "TASK-036"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-041",
+      "category": "functional",
+      "priority": "high",
+      "description": "Централизовать AuditLog service и подключить обязательные события с redaction секретов",
+      "acceptance_criteria": [
+        "Есть единый сервис записи AuditLog с actorUserId, action, entityType, entityId, storeId, beforeData, afterData и metadata",
+        "Логируются успешный и неуспешный login, изменения пользователей, доступов, товаров, категорий, размещений, цен, upload, магазинов, весов и публикаций",
+        "Secrets не пишутся в логи: passwords, session tokens, reset tokens, invite tokens и apiToken",
+        "AuditLog нельзя редактировать через публичные API",
+        "Системные действия и действия устройств допускают actorUserId = null"
+      ],
+      "test_steps": [
+        "Шаг 1: Выполнить по одному действию из ключевых доменов: login fail, product update, price update, publish, scale token regeneration",
+        "Шаг 2: Открыть AuditLog через базу или API",
+        "Шаг 3: Проверить наличие записей с корректными entityType/action",
+        "Шаг 4: Проверить, что секретные значения отсутствуют в beforeData, afterData и metadata",
+        "Шаг 5: Попробовать изменить AuditLog через API и получить отказ или отсутствие endpoint"
+      ],
+      "dependencies": [
+        "TASK-035",
+        "TASK-039"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-042",
+      "category": "ui",
+      "priority": "medium",
+      "description": "Создать Global Logs и Store Logs UI с разграничением доступа",
+      "acceptance_criteria": [
+        "Admin видит Global Logs с AuditLog и ScaleSyncLog",
+        "Admin может фильтровать логи по store, entityType, action/status и дате",
+        "Store Details имеет Logs tab для логов конкретного магазина",
+        "Operator видит только ограниченные логи или summary своих магазинов, если доступ включён",
+        "Operator не может открыть global logs"
+      ],
+      "test_steps": [
+        "Шаг 1: Под admin открыть Global Logs и проверить последние действия",
+        "Шаг 2: Применить фильтр по магазину и статусу sync",
+        "Шаг 3: Открыть Store Details -> Logs и проверить только логи магазина",
+        "Шаг 4: Под operator попробовать открыть Global Logs и получить отказ",
+        "Шаг 5: Под operator открыть Logs доступного магазина и проверить ограниченный набор данных"
+      ],
+      "dependencies": [
+        "TASK-041",
+        "TASK-017"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-043",
+      "category": "integration",
+      "priority": "medium",
+      "description": "Реализовать Admin Dashboard aggregation API",
+      "acceptance_criteria": [
+        "Admin Dashboard API возвращает количество магазинов и весов",
+        "API возвращает количество весов с ошибками и без синхронизации",
+        "API возвращает последние опубликованные версии",
+        "API возвращает последние ошибки синхронизации и проблемные весы",
+        "Operator не имеет доступа к admin dashboard aggregation"
+      ],
+      "test_steps": [
+        "Шаг 1: Подготовить магазины, устройства, опубликованные версии и sync errors",
+        "Шаг 2: Под admin запросить dashboard API",
+        "Шаг 3: Проверить counts, последние версии и список проблемных устройств",
+        "Шаг 4: Под operator запросить тот же endpoint и получить 403"
+      ],
+      "dependencies": [
+        "TASK-039",
+        "TASK-041"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-044",
+      "category": "ui",
+      "priority": "medium",
+      "description": "Создать Admin Dashboard и Operator Dashboard",
+      "acceptance_criteria": [
+        "Admin видит карточки магазинов, весов, весов с ошибками и весов без синхронизации",
+        "Admin видит последние опубликованные версии, последние ошибки синхронизации, проблемные весы и быстрые ссылки",
+        "Operator видит список назначенных магазинов",
+        "Для каждого магазина operator видит текущую версию, статус публикации, статус синхронизации, ошибки и кнопку Открыть каталог",
+        "Проблемные весы визуально подсвечиваются"
+      ],
+      "test_steps": [
+        "Шаг 1: Под admin открыть Dashboard и проверить сводные карточки",
+        "Шаг 2: Проверить блоки последних версий и ошибок синхронизации",
+        "Шаг 3: Под operator открыть Dashboard и проверить только назначенные магазины",
+        "Шаг 4: Нажать Открыть каталог и перейти в Store Details -> Catalog",
+        "Шаг 5: Создать sync error и проверить подсветку проблемного статуса"
+      ],
+      "dependencies": [
+        "TASK-043",
+        "TASK-040",
+        "TASK-017"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-045",
+      "category": "security",
+      "priority": "high",
+      "description": "Провести end-to-end security regression для RBAC, CSRF, сессий, токенов и логов",
+      "acceptance_criteria": [
+        "Operator не может получить доступ к чужому магазину через прямой API-запрос",
+        "Blocked user не может войти и использовать старую сессию",
+        "State-changing requests без CSRF защиты отклоняются",
+        "Session cookies имеют production-ready атрибуты",
+        "Invite/reset/session/apiToken значения не возвращаются и не пишутся в логи после создания",
+        "Scale API с неверным token и blocked scale получает отказ"
+      ],
+      "test_steps": [
+        "Шаг 1: Выполнить сценарии прямых API-запросов operator к чужим storeId",
+        "Шаг 2: Заблокировать пользователя с активной сессией и проверить недоступность protected endpoints",
+        "Шаг 3: Выполнить POST без CSRF token и проверить отказ",
+        "Шаг 4: Проверить Set-Cookie атрибуты в devtools или curl",
+        "Шаг 5: Поискать секретные значения в AuditLog, ScaleSyncLog и frontend state",
+        "Шаг 6: Проверить отказ Scale API для неверного token и blocked scale"
+      ],
+      "dependencies": [
+        "TASK-041",
+        "TASK-044"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-046",
+      "category": "infrastructure",
+      "priority": "medium",
+      "description": "Подготовить production-oriented Docker Compose, static uploads volume и deployment notes для MVP",
+      "acceptance_criteria": [
+        "Docker Compose описывает backend, frontend, PostgreSQL и volume для uploaded files",
+        "Env example содержит все необходимые переменные без секретных значений",
+        "Backend может отдавать или проксировать publicUrl загруженных файлов в локальном storage",
+        "Описан ручной dump PostgreSQL перед важными изменениями",
+        "Описано ручное копирование uploaded files",
+        "Production режим требует HTTPS через reverse proxy или явно документированный внешний TLS слой"
+      ],
+      "test_steps": [
+        "Шаг 1: Запустить проект из чистой директории по README/env example",
+        "Шаг 2: Загрузить изображение и проверить доступность publicUrl после перезапуска контейнеров",
+        "Шаг 3: Выполнить команду ручного dump PostgreSQL из документации",
+        "Шаг 4: Проверить, что env example не содержит реальных секретов",
+        "Шаг 5: Проверить, что production cookies требуют Secure/HTTPS"
+      ],
+      "dependencies": [
+        "TASK-029",
+        "TASK-045"
+      ],
+      "status": "pending"
+    }
+  ]
+}
