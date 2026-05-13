@@ -38,3 +38,19 @@ Evidence:
 Next:
 - Send the handoff to backend agent.
 - Backend implements TASK-001 and reports commits plus exact test results.
+
+## 2026-05-13 04:14 — TASK-001 — backend implementation
+
+Status: implemented, not marked done
+Owner: backend
+Summary:
+- Added Docker Compose skeleton with PostgreSQL, NestJS backend and React/Vite frontend services.
+- Added backend `GET /api/health` endpoint with CORS for frontend.
+- Added frontend foundation page that fetches backend health and displays OK/error state.
+- Added README run instructions and local development ignores.
+
+Evidence:
+- Backend health URL: http://localhost:3000/api/health
+- Frontend URL: http://localhost:5173
+- Tests run: backend build, frontend build, docker compose up --build, curl backend health, curl frontend HTTP status.
+- TASK-001 intentionally not marked done per handoff/user instruction.
