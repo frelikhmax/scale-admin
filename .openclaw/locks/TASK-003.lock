@@ -1,0 +1,7 @@
+task: TASK-003
+owner: backend
+status: assigned
+handoff: /home/clawd/projects/scale-admin/.openclaw/handoffs/TASK-003-backend.md
+created_by: manager
+created_at: 2026-05-13T18:28:00+02:00
+notes: Implementation lock. Tester/reviewer excluded. Manager will verify and close.
