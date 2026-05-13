@@ -1,7 +1,35 @@
 import { Module } from '@nestjs/common';
+import { AdvertisingModule } from './advertising/advertising.module';
+import { AppConfigModule } from './config/config.module';
+import { AuthModule } from './auth/auth.module';
+import { CatalogModule } from './catalog/catalog.module';
+import { EmailModule } from './email/email.module';
+import { FilesModule } from './files/files.module';
 import { HealthController } from './health.controller';
+import { LogsModule } from './logs/logs.module';
+import { PricesModule } from './prices/prices.module';
+import { ProductsModule } from './products/products.module';
+import { PublishingModule } from './publishing/publishing.module';
+import { ScalesModule } from './scales/scales.module';
+import { StoresModule } from './stores/stores.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
+  imports: [
+    AppConfigModule,
+    AuthModule,
+    UsersModule,
+    StoresModule,
+    ProductsModule,
+    CatalogModule,
+    PricesModule,
+    AdvertisingModule,
+    PublishingModule,
+    ScalesModule,
+    LogsModule,
+    FilesModule,
+    EmailModule,
+  ],
   controllers: [HealthController],
 })
 export class AppModule {}
