@@ -6,15 +6,16 @@
 - PRD.md and tasks.json are the source of truth.
 - Manager coordinates tasks, handoffs, implementation assignments and progress updates using the strict 3-bot workflow: manager, backend, frontend.
 - TASK-001 is fully closed and verified done.
-- TASK-002 is assigned to backend.
+- TASK-002 is fully closed and verified done by manager.
 
 ## Active task
 
-- TASK-002 — backend — assigned 2026-05-13 12:30 CEST.
+None.
 
 ## Completed tasks
 
 - TASK-001 — done and verified.
+- TASK-002 — done and manager-verified.
 
 ## Notes
 
@@ -104,3 +105,27 @@ Evidence:
 
 Next:
 - Backend implements TASK-002 and reports commits plus exact test results.
+
+## 2026-05-13 12:42 — TASK-002 — backend implementation and manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Backend reported TASK-002 implemented and self-tested in commit `6789f1f chore: add backend config foundation` without marking `tasks.json` done.
+- Manager inspected repository source of truth and implementation files.
+- Confirmed centralized NestJS config via `@nestjs/config` and startup env validation.
+- Confirmed required `.env.example` exists.
+- Confirmed empty modules exist for Auth, Users, Stores, Products, Catalog, Prices, Advertising, Publishing, Scales, Logs, Files and Email.
+- Confirmed bootstrap reads centralized `PORT` and `FRONTEND_ORIGIN` configuration.
+- Marked TASK-002 `status` as `done` in `tasks.json` after manager verification of the required test steps.
+- Released `.openclaw/locks/TASK-002.lock`.
+
+Evidence:
+- Commit inspected: `6789f1f chore: add backend config foundation`.
+- Build: `cd backend && npm run build` passed.
+- Valid env startup: `PORT=3011 NODE_ENV=development DATABASE_URL=postgresql://scale_admin:scale_admin_password@localhost:5432/scale_admin FRONTEND_ORIGIN=http://localhost:5173 npm run start:prod` started successfully.
+- Health check: `curl http://localhost:3011/api/health` returned `{"status":"ok","service":"scale-admin-backend",...}`.
+- Missing env check: running without `DATABASE_URL` exited with code 1 and included `Invalid environment configuration: - DATABASE_URL is required and must be a non-empty string`.
+
+Next:
+- TASK-003 is unblocked.
