@@ -152,3 +152,36 @@ Evidence:
 Next:
 - Send executable A2A assignment to backend.
 - Backend implements TASK-003, commits implementation changes, runs test steps, and reports exact results.
+
+## 2026-05-13 18:34 — TASK-003 — backend implementation and manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Backend reported TASK-003 implemented and self-tested in commit `3ee0ea7 feat: add Prisma auth access migration` without marking `tasks.json` done.
+- Manager inspected the Prisma schema, migration SQL, Prisma NestJS module/service wiring, package changes and Dockerfile changes.
+- Confirmed Prisma is configured for PostgreSQL via `DATABASE_URL`.
+- Confirmed auth/access models exist: User, UserCredential, UserSession, UserInvite, PasswordResetToken, UserStoreAccess and AuditLog.
+- Confirmed active-user email uniqueness is enforced by PostgreSQL partial unique index `users_emailNormalized_active_key` where `deletedAt` is null.
+- Confirmed migration applies successfully on a clean PostgreSQL database.
+- Marked TASK-003 `status` as `done` in `tasks.json` after manager verification of required test steps.
+- Released `.openclaw/locks/TASK-003.lock`.
+
+Evidence:
+- Implementation commit inspected: `3ee0ea7 feat: add Prisma auth access migration`.
+- Prisma validate: `DATABASE_URL=... npx prisma validate` passed.
+- Prisma generate: `DATABASE_URL=... npx prisma generate` passed.
+- Backend build: `cd backend && npm run build` passed.
+- Clean database reset: `docker compose down -v` followed by `docker compose up -d postgres` passed.
+- Migration: `DATABASE_URL=... npx prisma migrate dev --name verify_task_003 --skip-generate` applied `20260513183000_init_auth_access` successfully.
+- SQL table check confirmed: `audit_logs`, `password_reset_tokens`, `user_credentials`, `user_invites`, `user_sessions`, `user_store_accesses`, `users`.
+- SQL index check confirmed partial unique indexes: `users_emailNormalized_active_key` and `user_store_accesses_active_key`.
+- Docker backend build/start: `docker compose up --build -d backend` passed.
+- Health check: `curl http://localhost:3000/api/health` returned `{"status":"ok","service":"scale-admin-backend",...}`.
+
+Notes:
+- `UserStoreAccess.storeId` and `AuditLog.storeId` are UUID fields without Store foreign keys until TASK-004 adds business-domain models.
+- Partial unique indexes are maintained in migration SQL because Prisma schema does not express PostgreSQL partial unique indexes directly.
+
+Next:
+- TASK-004 is unblocked.
