@@ -110,24 +110,7 @@
       "openai-codex:frelikhmax@gmail.com": {
         "provider": "openai-codex",
         "mode": "oauth",
-        "email": "frelikhmax@gmail.com"
-      }
-    }
-  },
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "groups": {
-        "*": {
-          "requireMention": true
-        }
-      },
-      "botToken": "<REDACTED>",
-      "accounts": {
-        "manager": {
-          "enabled": true,
-          "botToken": "<REDACTED>"
-        }
+        "email": "<REDACTED>"
       }
     }
   },
@@ -139,7 +122,7 @@
   },
   "meta": {
     "lastTouchedVersion": "2026.5.7",
-    "lastTouchedAt": "2026-05-12T22:35:57.550Z"
+    "lastTouchedAt": "2026-05-13T01:25:22.261Z"
   },
   "messages": {
     "groupChat": {
@@ -148,9 +131,7 @@
   },
   "skills": {
     "entries": {
-      "1password": {
-        "enabled": false
-      },
+      "1password": "<REDACTED>",
       "apple-notes": {
         "enabled": false
       },
@@ -290,7 +271,7 @@
   },
   "commands": {
     "ownerAllowFrom": [
-      "telegram:7957030047"
+      "<REDACTED>"
     ]
   },
   "bindings": [
@@ -309,6 +290,33 @@
         "channel": "telegram",
         "accountId": "manager"
       }
+    },
+    {
+      "type": "route",
+      "agentId": "backend",
+      "match": {
+        "channel": "telegram",
+        "accountId": "backend"
+      }
     }
-  ]
+  ],
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "accounts": {
+        "default": {
+          "botToken": "<REDACTED>"
+        },
+        "backend": {
+          "enabled": true,
+          "botToken": "<REDACTED>"
+        },
+        "manager": {
+          "enabled": true,
+          "botToken": "<REDACTED>"
+        }
+      },
+      "botToken": "<REDACTED>"
+    }
+  }
 }
