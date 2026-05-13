@@ -4,21 +4,24 @@
 
 - Project initialized.
 - PRD.md and tasks.json are the source of truth.
-- Manager coordinates tasks, handoffs, testing, review and progress updates.
+- Manager coordinates tasks, handoffs, implementation assignments and progress updates using the strict 3-bot workflow: manager, backend, frontend.
+- TASK-001 is fully closed and verified done.
+- TASK-002 is assigned to backend.
 
 ## Active task
 
-None.
+- TASK-002 — backend — assigned 2026-05-13 12:30 CEST.
 
 ## Completed tasks
 
-None yet.
+- TASK-001 — done and verified.
 
 ## Notes
 
 - Do not mark a task as done until all test_steps pass.
 - Do not delete or rewrite tasks in tasks.json.
 - Only update task status according to the workflow.
+- Do not assign tester or reviewer.
 
 ## 2026-05-13 01:29 — TASK-001 — базовый monorepo/skeleton
 
@@ -38,6 +41,22 @@ Evidence:
 Next:
 - Send the handoff to backend agent.
 - Backend implements TASK-001 and reports commits plus exact test results.
+
+## 2026-05-13 04:14 — TASK-001 — backend implementation
+
+Status: implemented, not marked done
+Owner: backend
+Summary:
+- Added Docker Compose skeleton with PostgreSQL, NestJS backend and React/Vite frontend services.
+- Added backend `GET /api/health` endpoint with CORS for frontend.
+- Added frontend foundation page that fetches backend health and displays OK/error state.
+- Added README run instructions and local development ignores.
+
+Evidence:
+- Backend health URL: http://localhost:3000/api/health
+- Frontend URL: http://localhost:5173
+- Tests run: backend build, frontend build, docker compose up --build, curl backend health, curl frontend HTTP status.
+- TASK-001 intentionally not marked done per handoff/user instruction.
 
 ## 2026-05-13 04:22 — TASK-001 — tester verification
 
@@ -63,18 +82,25 @@ Evidence:
 Next:
 - TASK-002 is unblocked.
 
-## 2026-05-13 04:14 — TASK-001 — backend implementation
+## 2026-05-13 12:30 — TASK-001 lock release and TASK-002 assignment
 
-Status: implemented, not marked done
-Owner: backend
+Status: TASK-001 closed; TASK-002 assigned
+Owner: manager
 Summary:
-- Added Docker Compose skeleton with PostgreSQL, NestJS backend and React/Vite frontend services.
-- Added backend `GET /api/health` endpoint with CORS for frontend.
-- Added frontend foundation page that fetches backend health and displays OK/error state.
-- Added README run instructions and local development ignores.
+- Started fresh from repository source of truth and ignored prior Telegram context.
+- Inspected `tasks.json`, `progress.md`, `.openclaw/handoffs/`, `.openclaw/locks/`, git status and recent commits.
+- Confirmed TASK-001 is fully closed: `tasks.json` has `TASK-001` status `done`, and recent commit `f12e7ac test: mark TASK-001 verified done` records verification closure.
+- Released stale active lock `.openclaw/locks/TASK-001.lock` by removing it.
+- Selected TASK-002 because it is pending, critical priority, and its only dependency TASK-001 is done.
+- Assigned TASK-002 to backend because the task scope is NestJS backend environment configuration and backend module structure.
+- Created backend handoff and assignment lock for TASK-002.
 
 Evidence:
-- Backend health URL: http://localhost:3000/api/health
-- Frontend URL: http://localhost:5173
-- Tests run: backend build, frontend build, docker compose up --build, curl backend health, curl frontend HTTP status.
-- TASK-001 intentionally not marked done per handoff/user instruction.
+- Clean repository before assignment except tracked TASK-001 lock existed as an active stale lock.
+- Recent commit: `f12e7ac test: mark TASK-001 verified done`.
+- Removed lock: `.openclaw/locks/TASK-001.lock`.
+- Handoff: `.openclaw/handoffs/TASK-002-backend.md`.
+- Lock: `.openclaw/locks/TASK-002.lock`.
+
+Next:
+- Backend implements TASK-002 and reports commits plus exact test results.
