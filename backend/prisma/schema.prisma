@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  operator
+}
+
+enum UserStatus {
+  active
+  blocked
+  invited
+}
+
+model User {
+  id              String     @id @default(uuid()) @db.Uuid
+  email           String
+  emailNormalized String
+  emailVerifiedAt DateTime?
+  fullName        String
+  role            UserRole
+  status          UserStatus @default(invited)
+  lastLoginAt     DateTime?
+  createdByUserId String?    @db.Uuid
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  createdBy            User?                @relation("UserCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdUsers         User[]               @relation("UserCreatedBy")
+  credential           UserCredential?
+  sessions             UserSession[]
+  invitesSent          UserInvite[]         @relation("UserInviteInvitedBy")
+  passwordResetTokens  PasswordResetToken[]
+  storeAccesses        UserStoreAccess[]    @relation("UserStoreAccessUser")
+  storeAccessesGranted UserStoreAccess[]    @relation("UserStoreAccessGrantedBy")
+  auditLogs            AuditLog[]           @relation("AuditLogActor")
+
+  @@index([emailNormalized])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model UserCredential {
+  id                    String    @id @default(uuid()) @db.Uuid
+  userId                String    @unique @db.Uuid
+  passwordHash          String
+  passwordHashAlgorithm String
+  passwordHashParams    Json?
+  passwordChangedAt     DateTime?
+  mustChangePassword    Boolean   @default(false)
+  failedLoginCount      Int       @default(0)
+  lastFailedLoginAt     DateTime?
+  lockedUntil           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_credentials")
+}
+
+model UserSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid
+  sessionTokenHash String    @unique
+  createdAt        DateTime  @default(now())
+  lastUsedAt       DateTime?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  revokedReason    String?
+  ipAddress        String?
+  userAgent        String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@map("user_sessions")
+}
+
+model UserInvite {
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String
+  role            UserRole
+  tokenHash       String    @unique
+  invitedByUserId String?   @db.Uuid
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  invitedBy User? @relation("UserInviteInvitedBy", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([expiresAt])
+  @@map("user_invites")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model UserStoreAccess {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @db.Uuid
+  storeId         String    @db.Uuid
+  grantedByUserId String?   @db.Uuid
+  createdAt       DateTime  @default(now())
+  revokedAt       DateTime?
+
+  user      User  @relation("UserStoreAccessUser", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy User? @relation("UserStoreAccessGrantedBy", fields: [grantedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([storeId])
+  @@index([revokedAt])
+  @@map("user_store_accesses")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @db.Uuid
+  action      String
+  entityType  String
+  entityId    String?
+  storeId     String?  @db.Uuid
+  beforeData  Json?
+  afterData   Json?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@index([storeId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

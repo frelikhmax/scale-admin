@@ -8,6 +8,7 @@ import { FilesModule } from './files/files.module';
 import { HealthController } from './health.controller';
 import { LogsModule } from './logs/logs.module';
 import { PricesModule } from './prices/prices.module';
+import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
 import { PublishingModule } from './publishing/publishing.module';
 import { ScalesModule } from './scales/scales.module';
@@ -17,6 +18,7 @@ import { UsersModule } from './users/users.module';
 @Module({
   imports: [
     AppConfigModule,
+    PrismaModule,
     AuthModule,
     UsersModule,
     StoresModule,
