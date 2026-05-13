@@ -35,7 +35,7 @@
         "Шаг 3: Открыть frontend и проверить, что он показывает успешный статус backend"
       ],
       "dependencies": [],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TASK-002",

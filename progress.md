@@ -39,6 +39,30 @@ Next:
 - Send the handoff to backend agent.
 - Backend implements TASK-001 and reports commits plus exact test results.
 
+## 2026-05-13 04:22 — TASK-001 — tester verification
+
+Status: verified done
+Owner: tester
+Summary:
+- Located TASK-001 in `tasks.json` and confirmed the required test steps.
+- Re-ran backend and frontend builds successfully.
+- Re-ran `docker compose up --build`; PostgreSQL, backend, and frontend started successfully.
+- Verified backend health returned HTTP 200 with `{ "status": "ok" }`.
+- Verified frontend served HTTP 200 and backend CORS allows `http://localhost:5173`; source code displays `Backend health: OK` after a successful health fetch.
+- Investigated `neat-glade`: backend logs show the app was healthy, and the later failure-looking lines were caused by stopping Compose (`SIGTERM`) after tests, not by an implementation failure.
+- Marked TASK-001 `status` as `done` in `tasks.json` per workflow: status changes are allowed only after all test_steps pass.
+
+Evidence:
+- Backend build: `cd backend && npm run build` passed.
+- Frontend build: `cd frontend && npm run build` passed.
+- Compose: `docker compose up --build` built images and started services.
+- Backend health: `curl -i http://localhost:3000/api/health` returned HTTP 200 and `status: ok`.
+- Frontend: `curl -I http://localhost:5173` returned HTTP 200.
+- CORS/API reachability: `curl -i -H 'Origin: http://localhost:5173' http://localhost:3000/api/health` returned `Access-Control-Allow-Origin: http://localhost:5173`.
+
+Next:
+- TASK-002 is unblocked.
+
 ## 2026-05-13 04:14 — TASK-001 — backend implementation
 
 Status: implemented, not marked done
