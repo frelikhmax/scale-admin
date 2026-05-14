@@ -370,3 +370,28 @@ Notes:
 Next:
 - Merge `task/TASK-007-login-sessions` into `main` with `--no-ff`.
 - TASK-008 and TASK-009 are unblocked after merge.
+
+## 2026-05-14 13:31 — TASK-008 assignment
+
+Status: assigned
+Owner: backend
+Summary:
+- Resynced repository source of truth before assignment.
+- Confirmed repository was on `main`, clean, and had no active lock files.
+- Ran `git pull --ff-only` on `main`; repository was already up to date.
+- Selected TASK-008 because it is the highest-priority pending task with all dependencies done.
+- Verified dependency TASK-007 is done in `tasks.json`.
+- Created task branch `task/TASK-008-session-rbac-store-access` before coordination changes.
+- Assigned TASK-008 to backend because the scope is backend session guard, RBAC, and store access enforcement.
+- Created backend handoff and assignment lock for TASK-008.
+- Tester/reviewer are excluded by workflow for this assignment.
+
+Evidence:
+- Handoff: .openclaw/handoffs/TASK-008-backend.md
+- Lock: .openclaw/locks/TASK-008.lock
+- Dependency: TASK-007 is done in tasks.json.
+- Recent closure/merge commit: 5bdcbb2 merge: complete TASK-007 login sessions.
+
+Next:
+- Send executable A2A assignment to backend.
+- Backend implements TASK-008 on `task/TASK-008-session-rbac-store-access`, commits implementation changes, runs test steps, and reports exact results.
