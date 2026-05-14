@@ -640,3 +640,37 @@ Notes:
 
 Next:
 - TASK-013 is unblocked if dependencies are satisfied.
+
+## 2026-05-14 19:46 — TASK-013 — backend implementation and manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented admin-only operator store access management in commit `ffa995c feat: manage operator store access`.
+- Added grant/revoke/list access endpoints under `/api/users/:userId/store-accesses`.
+- Added `GET /api/stores` so admins see all non-archived stores and operators see only stores with active, non-revoked `UserStoreAccess`.
+- Grant/revoke write `AuditLog` entries and revoke affected operator sessions after permission changes.
+
+Manager verification:
+- Confirmed branch `task/TASK-013-operator-store-access-management`.
+- Inspected scoped diff against `main`.
+- Ran `cd backend && npm run build`: PASS.
+- Ran `DATABASE_URL=postgresql://scale_admin:scale_admin_password@localhost:5432/scale_admin npx prisma validate`: PASS.
+- Ran `scripts/openclaw-docker-verify.sh TASK-013`: `DOCKER_VERIFY_RESULT=PASS`.
+
+Backend verification evidence reported:
+- Grant operator store access: `POST /api/users/:userId/store-accesses` returned 201 with `granted=true`.
+- Operator `GET /api/stores` saw assigned store and not unassigned store.
+- Duplicate grant returned idempotent result with `duplicateActiveAccess=true`; active access count stayed 1.
+- Revoke access filled `revokedAt`; old operator session returned 401 after permission change.
+- Fresh operator session after revoke saw no revoked store.
+- AuditLog contained `user_store_access.granted` and `user_store_access.revoked`.
+
+Commits:
+- `f8df28c chore: assign TASK-013 operator store access`
+- `ffa995c feat: manage operator store access`
+- Closure commit follows this entry.
+
+Notes:
+- Duplicate active grants are intentionally idempotent, matching task acceptance of refusal or idempotent result without duplicates.
+- No frontend UI was implemented; TASK-015 remains the UI follow-up after its dependencies.
