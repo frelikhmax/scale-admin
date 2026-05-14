@@ -439,3 +439,51 @@ Notes:
 Next:
 - Merge `task/TASK-008-session-rbac-store-access` into `main` with `--no-ff`.
 - TASK-009, TASK-012, TASK-013, TASK-016, TASK-021, and TASK-029 are unblocked after merge.
+
+## 2026-05-14 14:14 — TASK-006 assignment
+
+Status: assigned
+Owner: frontend
+Summary:
+- Ran `scripts/openclaw-preflight.sh`; result PASS with no warnings/failures.
+- Selected script-provided next task TASK-006, agent frontend, branch `task/TASK-006-integration-layer-typescript-rtk-query-client`.
+- Created per-task branch before coordination changes.
+- Created frontend handoff and assignment lock.
+- Tester/reviewer are excluded by workflow for this assignment.
+
+Evidence:
+- Handoff: `.openclaw/handoffs/TASK-006-frontend.md`
+- Lock: `.openclaw/locks/TASK-006.lock`
+- Dependency: TASK-001 is done in `tasks.json`.
+- Preflight: `PREFLIGHT_RESULT=PASS`, `WARNING_COUNT=0`, `FAILURE_COUNT=0`.
+
+Next:
+- Send executable A2A assignment to frontend.
+- Frontend implements TASK-006, commits implementation changes, runs test steps, and reports exact results.
+
+## 2026-05-14 14:35 — TASK-006 — frontend implementation and manager closure
+
+Status: done
+Owner: frontend
+Summary:
+- Frontend reported TASK-006 implemented and self-tested in commit `a2b9106 feat: add frontend RTK Query backend API layer` without marking `tasks.json` done.
+- Manager reviewed implementation files and confirmed the frontend now uses a shared RTK Query backend API client/baseQuery.
+- Confirmed backend requests include `credentials: 'include'`.
+- Confirmed health endpoint is called through `useGetHealthQuery` / `/health`, not ad-hoc component fetch.
+- Confirmed 401, 403, network/fetch, parsing and timeout errors are normalized into understandable messages.
+- Accepted manual Docker Compose verification supplied by the user for the previously blocked runtime Docker gate.
+- Marked TASK-006 `status` as `done` in `tasks.json` after manager verification.
+- Released `.openclaw/locks/TASK-006.lock`.
+
+Evidence:
+- Coordination commit: `1d3d0bc chore: assign TASK-006 frontend api layer`.
+- Implementation commit inspected: `a2b9106 feat: add frontend RTK Query backend API layer`.
+- Manager build: `npm --prefix frontend run build` passed.
+- Manager backend sanity build: `npm --prefix backend run build` passed.
+- Source check confirmed `fetchBaseQuery`, `credentials: 'include'`, `useGetHealthQuery`, and `query: () => '/health'`.
+- Manual Docker verification on the same repo/branch confirmed `docker compose -f docker-compose.yml up --build -d`, healthy postgres/backend/frontend, backend health HTTP 200, frontend HTTP 200, frontend still served while backend stopped, backend restart recovered to HTTP 200, and final git status clean.
+
+Next:
+- Merge task branch into `main` with `--no-ff`.
+- Run `scripts/openclaw-after-task-check.sh TASK-006`.
+
