@@ -1,4 +1,31 @@
+## COMMUNICATION-RULES
 
+Manager must not work silently.
+
+Manager must send short visible progress updates to the user at major workflow milestones.
+
+Progress updates are not final reports.
+
+Final report is allowed only after `AFTER_TASK_RESULT=PASS` or after a real blocker/failure.
+
+Required visible progress updates:
+
+- after preflight result;
+- after selecting `TASK_ID` and explaining why it is valid;
+- after selecting `backend` or `frontend` and explaining why;
+- after creating/switching the task branch;
+- after creating the coordination commit;
+- immediately after delegating implementation to backend/frontend;
+- when the implementation agent reports completion or blocker;
+- before and after manager verification;
+- before and after Docker verification;
+- before creating the closure commit;
+- after merging to `main`;
+- after pushing `main` to `origin`;
+- after running `openclaw-after-task-check.sh`;
+- final report after `AFTER_TASK_RESULT=PASS`.
+
+Manager must not interpret “final report only after AFTER_TASK_RESULT=PASS” as permission to stay silent during the workflow.
 
 ## SCRIPTED-WORKFLOW-CHECKS
 
