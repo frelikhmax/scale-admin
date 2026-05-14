@@ -721,3 +721,45 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main`, then run `scripts/openclaw-after-task-check.sh TASK-014`.
+
+## 2026-05-14 22:05 — TASK-016 — backend implementation and manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented TASK-016 in commit `c6e71e5 feat: add store crud api` without marking `tasks.json` done.
+- Added admin-only store creation and update endpoints in the existing Stores module.
+- Added protected store detail retrieval using existing store-access rules.
+- Creating an active store creates a main active `StoreCatalog` in the same transaction.
+- Duplicate `Store.code` returns 409 Conflict.
+- Create and update write `AuditLog` records with actor, storeId, before/after data, IP, and user agent.
+- Operator create/edit attempts are denied by RBAC.
+- Marked TASK-016 `status` as `done` in `tasks.json` after manager verification and Docker verification passed.
+- Released `.openclaw/locks/TASK-016.lock`.
+
+Manager verification:
+- Confirmed branch `task/TASK-016-store-crud`.
+- Inspected scoped diff against coordination commit: only `backend/src/stores/stores.controller.ts` and `backend/src/stores/stores.service.ts` changed.
+- Confirmed `tasks.json` stayed pending during implementation and was updated only during closure.
+- Ran `cd backend && npm run build`: PASS.
+- Ran `cd backend && npx prisma validate`: PASS.
+- Ran `git diff --check 2440d05..HEAD`: PASS.
+- Ran `scripts/openclaw-docker-verify.sh TASK-016`: `DOCKER_VERIFY_RESULT=PASS`.
+
+Backend verification evidence reported:
+- Admin `POST /api/stores` created active store with response `201` and returned a `mainCatalog`.
+- DB check confirmed one StoreCatalog with status `active`, name `Main catalog`, for the created store.
+- Duplicate `Store.code` creation returned `409` with message `Store code already exists`.
+- Operator `POST /api/stores` returned `403`.
+- Operator `PATCH /api/stores/:storeId` returned `403`.
+- Admin `PATCH /api/stores/:storeId` returned `200`.
+- AuditLog contained `store.created` and `store.updated`, with actor and before/after update data.
+
+Commits:
+- `2440d05 chore: assign TASK-016 store crud`
+- `c6e71e5 feat: add store crud api`
+- Closure commit follows this entry.
+
+Notes:
+- Main catalog creation is implemented for active stores at creation time, matching TASK-016 acceptance criteria.
+- No hard delete endpoint was added because TASK-016 acceptance criteria require create/edit Store CRUD behavior and do not specify deletion semantics.
