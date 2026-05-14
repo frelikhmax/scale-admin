@@ -1,0 +1,6 @@
+TASK_ID=TASK-009
+AGENT=backend
+BRANCH=task/TASK-009-csrf-rate-limit-auth-endpoints
+STATUS=assigned
+CREATED_AT=2026-05-14T15:57:00+02:00
+HANDOFF=.openclaw/handoffs/TASK-009-backend.md

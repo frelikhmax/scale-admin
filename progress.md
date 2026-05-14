@@ -11,7 +11,7 @@
 
 ## Active task
 
-None.
+TASK-009 — assigned to backend on branch `task/TASK-009-csrf-rate-limit-auth-endpoints`.
 
 ## Completed tasks
 
@@ -486,4 +486,27 @@ Evidence:
 Next:
 - Merge task branch into `main` with `--no-ff`.
 - Run `scripts/openclaw-after-task-check.sh TASK-006`.
+
+## 2026-05-14 15:57 — TASK-009 assignment
+
+Status: assigned
+Owner: backend
+Summary:
+- Ran `scripts/openclaw-preflight.sh`; result PASS with no warnings/failures.
+- Treated preflight as deterministic repository-state verification only, not task-selection authority.
+- Read `tasks.json`, checked dependencies and priorities, and selected TASK-009 as the first/highest-priority valid pending task.
+- Chose backend because TASK-009 concerns CSRF protection and rate limiting for web auth API endpoints.
+- Created per-task branch before coordination changes.
+- Created backend handoff and assignment lock.
+- Tester/reviewer are excluded by workflow for this assignment.
+
+Evidence:
+- Handoff: `.openclaw/handoffs/TASK-009-backend.md`
+- Lock: `.openclaw/locks/TASK-009.lock`
+- Dependency: TASK-007 is done in `tasks.json`.
+- Preflight: `PREFLIGHT_RESULT=PASS`, `WARNING_COUNT=0`, `FAILURE_COUNT=0`.
+
+Next:
+- Send executable A2A assignment to backend.
+- Backend implements TASK-009, commits implementation changes, runs test steps, and reports exact results.
 
