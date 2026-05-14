@@ -812,3 +812,34 @@ Evidence:
 
 Next:
 - Delegate implementation to backend agent.
+
+## 2026-05-14 22:52 — TASK-018 — Store Details API implementation and manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented TASK-018 in commit `e213ee5 feat: add store details endpoint` without marking `tasks.json` done.
+- Added `GET /api/stores/:storeId/details` behind existing session, role and store-access guards.
+- Details response includes store, activeCatalog, overview, currentVersionId, scales summary and recent sync logs section.
+- Admin can open any store; operator can open only stores with active assigned access.
+- Manager verified code scope, backend build, Prisma schema, source-level acceptance criteria and deterministic Docker verification.
+- Marked TASK-018 `status` as `done` after manager verification and Docker verification passed.
+- Released `.openclaw/locks/TASK-018.lock`.
+
+Evidence:
+- Coordination commit: `4b6a55f chore: assign TASK-018 store details api`.
+- Implementation commit inspected: `e213ee5 feat: add store details endpoint`.
+- Changed files inspected: `backend/src/stores/stores.controller.ts`, `backend/src/stores/stores.service.ts`.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validate: `DATABASE_URL=... npx prisma validate` passed.
+- Whitespace check: `git diff --check 4b6a55f..HEAD` passed.
+- Focused source checks confirmed details route, store-access decorator, active catalog lookup, currentVersionId, overview, scales and syncLogs response sections.
+- Backend reported focused API checks: admin details `200`, assigned operator details `200`, foreign operator details `403`, active catalog present and matched DB.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-018` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- If a store has no active `StoreCatalog`, details returns 404 `Active store catalog not found`, preserving the task requirement that Store Details return an active catalog.
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+
+Next:
+- Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-018`.
