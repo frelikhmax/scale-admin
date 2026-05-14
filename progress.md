@@ -301,3 +301,28 @@ Notes:
 Next:
 - Merge `task/TASK-005-seed-admin-data` into `main` with `--no-ff`.
 - TASK-007 is unblocked after merge.
+
+## 2026-05-14 08:40 — TASK-007 assignment
+
+Status: assigned
+Owner: backend
+Summary:
+- Resynced repository source of truth before assignment.
+- Confirmed repository was on `main`, clean, and had no active lock files.
+- Ran `git pull --ff-only` on `main`; repository was already up to date.
+- Selected TASK-007 because it is the highest-priority pending task with all dependencies done.
+- Verified dependency TASK-005 is done in `tasks.json`.
+- Created task branch `task/TASK-007-login-sessions` before coordination changes.
+- Assigned TASK-007 to backend because the scope is backend auth/session security.
+- Created backend handoff and assignment lock for TASK-007.
+- Tester/reviewer are excluded by workflow for this assignment.
+
+Evidence:
+- Handoff: .openclaw/handoffs/TASK-007-backend.md
+- Lock: .openclaw/locks/TASK-007.lock
+- Dependency: TASK-005 is done in tasks.json.
+- Recent closure/merge commit: 4eb1a61 merge: complete TASK-005 seed admin data.
+
+Next:
+- Send executable A2A assignment to backend.
+- Backend implements TASK-007 on `task/TASK-007-login-sessions`, commits implementation changes, runs test steps, and reports exact results.

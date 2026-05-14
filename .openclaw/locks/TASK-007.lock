@@ -1,0 +1,7 @@
+task: TASK-007
+owner: backend
+branch: task/TASK-007-login-sessions
+handoff: .openclaw/handoffs/TASK-007-backend.md
+status: assigned
+created_by: manager
+created_at: 2026-05-14T08:40:00+02:00
