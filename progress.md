@@ -326,3 +326,47 @@ Evidence:
 Next:
 - Send executable A2A assignment to backend.
 - Backend implements TASK-007 on `task/TASK-007-login-sessions`, commits implementation changes, runs test steps, and reports exact results.
+
+## 2026-05-14 08:56 — TASK-007 — backend implementation and manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented TASK-007 and committed `4863efe feat: add cookie session auth` without marking `tasks.json` done.
+- Manager reviewed implementation files and confirmed scope stayed within backend login/logout/session auth.
+- Confirmed login creates an HttpOnly SameSite=Lax cookie and stores only a SHA-256 base64url session token hash in `UserSession`.
+- Confirmed bad password and blocked user logins return 401 and do not create sessions.
+- Confirmed logout revokes the active session with `revokedAt` and `revokedReason=logout`, clears the cookie, and the session is no longer accepted.
+- Confirmed production cookie includes `Secure`.
+- Confirmed idle timeout and absolute timeout revoke sessions and return 401.
+- Marked TASK-007 `status` as `done` in `tasks.json` after manager verification of required test steps.
+- Released `.openclaw/locks/TASK-007.lock`.
+
+Evidence:
+- Coordination commit: `928ad88 chore: assign TASK-007 to backend`.
+- Implementation commit inspected: `4863efe feat: add cookie session auth`.
+- Changed files reviewed: backend/.env.example, backend/src/auth/auth.controller.ts, backend/src/auth/auth.module.ts, backend/src/auth/auth.service.ts, backend/src/auth/password.util.ts, backend/src/auth/session-token.util.ts, backend/src/config/app.config.ts, backend/src/config/environment.validation.ts, backend/tsconfig.build.json.
+- `tasks.json` was unchanged by backend implementation before manager closure.
+- Prisma validate: `DATABASE_URL=... npx prisma validate` passed.
+- Backend build: `cd backend && npm run build` passed.
+- Seed/admin login verification: `POST /api/auth/login` returned 200 for `admin@example.com`.
+- Development Set-Cookie verification: `scale_admin_session=<redacted>; Max-Age=1209600; Path=/; Expires=...; HttpOnly; SameSite=Lax`.
+- Session verification before logout: `GET /api/auth/session` returned 200 with admin user/session data.
+- Logout verification: `POST /api/auth/logout` returned 200 with `{"revoked":true}` and cleared the cookie.
+- Session verification after logout: `GET /api/auth/session` returned 401.
+- Database session check confirmed `hashLength=43`, no plain cookie prefix, `revokedReason=logout`, `revokedAtSet=true`, `expiresAtSet=true`, `lastUsedAtSet=true`.
+- Bad password verification: login returned 401 and session count stayed unchanged.
+- Blocked user verification: login returned 401 and session count stayed unchanged.
+- Production Set-Cookie verification: cookie includes `HttpOnly; Secure; SameSite=Lax`.
+- Idle timeout verification: stale `lastUsedAt` session returned 401 and `revokedReason=idle_timeout`.
+- Absolute timeout verification: expired session returned 401 and `revokedReason=absolute_timeout`.
+- Git status before closure was clean.
+
+Notes:
+- CSRF protection and rate limiting remain for TASK-009.
+- Full session guard/RBAC/store access remains for TASK-008.
+- Password verification currently supports the PBKDF2-SHA512 format produced by the TASK-005 seed.
+
+Next:
+- Merge `task/TASK-007-login-sessions` into `main` with `--no-ff`.
+- TASK-008 and TASK-009 are unblocked after merge.
