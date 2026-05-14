@@ -1,7 +1,0 @@
-task: TASK-008
-owner: backend
-branch: task/TASK-008-session-rbac-store-access
-handoff: .openclaw/handoffs/TASK-008-backend.md
-status: assigned
-created_by: manager
-created_at: 2026-05-14T13:31:39+02:00
