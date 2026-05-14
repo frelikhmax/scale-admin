@@ -166,3 +166,47 @@ private runtime configuration
 local Docker override files
 
 Sensitive local files are intentionally kept outside git.
+
+## Public preview on VPS
+
+For ad-hoc public preview on the VPS, use a local ignored `docker-compose.override.yml`.
+
+Example:
+
+```yaml
+services:
+  frontend:
+    build:
+      args:
+        VITE_API_BASE_URL: "http://132.243.114.86:3000"
+    environment:
+      VITE_API_BASE_URL: "http://132.243.114.86:3000"
+
+  backend:
+    environment:
+      FRONTEND_ORIGIN: "http://132.243.114.86:5173"
+This file must stay local and ignored.
+
+Public preview URLs:
+
+Frontend: http://132.243.114.86:5173/
+Backend health: http://132.243.114.86:3000/api/health
+
+Update public preview after new changes:
+
+git switch main
+git pull --ff-only origin main
+docker compose build --no-cache backend frontend
+docker compose up -d
+
+If Prisma migrations were added:
+
+cd backend
+npx prisma migrate deploy
+cd ..
+docker compose up -d
+
+Deterministic manager verification intentionally ignores this override and uses:
+
+docker compose -f docker-compose.yml ...
+
