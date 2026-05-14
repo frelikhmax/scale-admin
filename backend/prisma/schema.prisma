@@ -18,6 +18,74 @@ enum UserStatus {
   invited
 }
 
+enum StoreStatus {
+  active
+  inactive
+  archived
+}
+
+enum CatalogStatus {
+  active
+  inactive
+  archived
+}
+
+enum ProductStatus {
+  active
+  inactive
+  archived
+}
+
+enum ProductUnit {
+  kg
+  g
+  piece
+}
+
+enum CategoryStatus {
+  active
+  inactive
+  archived
+}
+
+enum PlacementStatus {
+  active
+  inactive
+  archived
+}
+
+enum PriceStatus {
+  active
+  inactive
+  archived
+}
+
+enum BannerStatus {
+  active
+  inactive
+  archived
+}
+
+enum CatalogVersionStatus {
+  published
+}
+
+enum ScaleDeviceStatus {
+  active
+  inactive
+  blocked
+  archived
+}
+
+enum ScaleSyncStatus {
+  no_update
+  update_available
+  package_delivered
+  ack_received
+  auth_failed
+  error
+}
+
 model User {
   id              String     @id @default(uuid()) @db.Uuid
   email           String
@@ -32,15 +100,17 @@ model User {
   updatedAt       DateTime   @updatedAt
   deletedAt       DateTime?
 
-  createdBy            User?                @relation("UserCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  createdUsers         User[]               @relation("UserCreatedBy")
-  credential           UserCredential?
-  sessions             UserSession[]
-  invitesSent          UserInvite[]         @relation("UserInviteInvitedBy")
-  passwordResetTokens  PasswordResetToken[]
-  storeAccesses        UserStoreAccess[]    @relation("UserStoreAccessUser")
-  storeAccessesGranted UserStoreAccess[]    @relation("UserStoreAccessGrantedBy")
-  auditLogs            AuditLog[]           @relation("AuditLogActor")
+  createdBy                User?                @relation("UserCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdUsers             User[]               @relation("UserCreatedBy")
+  credential               UserCredential?
+  sessions                 UserSession[]
+  invitesSent              UserInvite[]         @relation("UserInviteInvitedBy")
+  passwordResetTokens      PasswordResetToken[]
+  storeAccesses            UserStoreAccess[]    @relation("UserStoreAccessUser")
+  storeAccessesGranted     UserStoreAccess[]    @relation("UserStoreAccessGrantedBy")
+  auditLogs                AuditLog[]           @relation("AuditLogActor")
+  uploadedFiles            FileAsset[]          @relation("FileAssetUploadedBy")
+  publishedCatalogVersions CatalogVersion[]     @relation("CatalogVersionPublishedBy")
 
   @@index([emailNormalized])
   @@index([deletedAt])
@@ -126,8 +196,9 @@ model UserStoreAccess {
   createdAt       DateTime  @default(now())
   revokedAt       DateTime?
 
-  user      User  @relation("UserStoreAccessUser", fields: [userId], references: [id], onDelete: Cascade)
-  grantedBy User? @relation("UserStoreAccessGrantedBy", fields: [grantedByUserId], references: [id], onDelete: SetNull)
+  user      User   @relation("UserStoreAccessUser", fields: [userId], references: [id], onDelete: Cascade)
+  store     Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  grantedBy User?  @relation("UserStoreAccessGrantedBy", fields: [grantedByUserId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([storeId])
@@ -149,11 +220,274 @@ model AuditLog {
   userAgent   String?
   createdAt   DateTime @default(now())
 
-  actor User? @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actor User?  @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  store Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
 
   @@index([actorUserId])
   @@index([entityType, entityId])
   @@index([storeId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model Store {
+  id        String      @id @default(uuid()) @db.Uuid
+  code      String      @unique
+  name      String
+  address   String?
+  timezone  String      @default("Europe/Moscow")
+  status    StoreStatus @default(active)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  catalogs        StoreCatalog[]
+  productPrices   StoreProductPrice[]
+  banners         AdvertisingBanner[]
+  scaleDevices    ScaleDevice[]
+  syncLogs        ScaleSyncLog[]
+  files           FileAsset[]
+  catalogVersions CatalogVersion[]
+  userAccesses    UserStoreAccess[]
+  auditLogs       AuditLog[]
+
+  @@index([status])
+  @@map("stores")
+}
+
+model StoreCatalog {
+  id               String        @id @default(uuid()) @db.Uuid
+  storeId          String        @db.Uuid
+  name             String
+  status           CatalogStatus @default(active)
+  currentVersionId String?       @db.Uuid
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  store          Store                     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  categories     Category[]
+  placements     CatalogProductPlacement[]
+  versions       CatalogVersion[]          @relation("CatalogVersions")
+  currentVersion CatalogVersion?           @relation("CurrentCatalogVersion", fields: [id, currentVersionId], references: [catalogId, id], onDelete: NoAction)
+
+  @@unique([id, storeId])
+  @@index([storeId])
+  @@index([status])
+  @@index([currentVersionId])
+  @@map("store_catalogs")
+}
+
+model Product {
+  id               String        @id @default(uuid()) @db.Uuid
+  defaultPluCode   String        @unique
+  name             String
+  shortName        String
+  description      String?
+  imageUrl         String?
+  imageFileAssetId String?       @db.Uuid
+  barcode          String?
+  sku              String?
+  unit             ProductUnit
+  status           ProductStatus @default(active)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  imageFileAsset FileAsset?                @relation("ProductImageFileAsset", fields: [imageFileAssetId], references: [id], onDelete: SetNull)
+  placements     CatalogProductPlacement[]
+  prices         StoreProductPrice[]
+
+  @@index([name])
+  @@index([shortName])
+  @@index([barcode])
+  @@index([sku])
+  @@index([status])
+  @@map("products")
+}
+
+model Category {
+  id        String         @id @default(uuid()) @db.Uuid
+  catalogId String         @db.Uuid
+  parentId  String?        @db.Uuid
+  name      String
+  shortName String
+  sortOrder Int            @default(0)
+  status    CategoryStatus @default(active)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  catalog    StoreCatalog              @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  parent     Category?                 @relation("CategoryParent", fields: [catalogId, parentId], references: [catalogId, id], onDelete: NoAction)
+  children   Category[]                @relation("CategoryParent")
+  placements CatalogProductPlacement[]
+
+  @@unique([catalogId, id])
+  @@index([catalogId])
+  @@index([parentId])
+  @@index([status])
+  @@index([catalogId, parentId, sortOrder])
+  @@map("categories")
+}
+
+model CatalogProductPlacement {
+  id         String          @id @default(uuid()) @db.Uuid
+  catalogId  String          @db.Uuid
+  categoryId String          @db.Uuid
+  productId  String          @db.Uuid
+  sortOrder  Int             @default(0)
+  status     PlacementStatus @default(active)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  catalog  StoreCatalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  category Category     @relation(fields: [catalogId, categoryId], references: [catalogId, id], onDelete: Cascade)
+  product  Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([catalogId])
+  @@index([categoryId])
+  @@index([productId])
+  @@index([status])
+  @@index([catalogId, categoryId, sortOrder])
+  @@map("catalog_product_placements")
+}
+
+model StoreProductPrice {
+  id        String      @id @default(uuid()) @db.Uuid
+  storeId   String      @db.Uuid
+  productId String      @db.Uuid
+  price     Decimal     @db.Decimal(12, 2)
+  currency  String      @default("RUB")
+  status    PriceStatus @default(active)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([storeId])
+  @@index([productId])
+  @@index([status])
+  @@map("store_product_prices")
+}
+
+model AdvertisingBanner {
+  id               String       @id @default(uuid()) @db.Uuid
+  storeId          String       @db.Uuid
+  imageUrl         String
+  imageFileAssetId String?      @db.Uuid
+  status           BannerStatus @default(active)
+  sortOrder        Int          @default(0)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  store          Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  imageFileAsset FileAsset? @relation("BannerImageFileAsset", fields: [imageFileAssetId], references: [id], onDelete: SetNull)
+
+  @@index([storeId])
+  @@index([status])
+  @@index([storeId, sortOrder])
+  @@map("advertising_banners")
+}
+
+model CatalogVersion {
+  id                String               @id @default(uuid()) @db.Uuid
+  catalogId         String               @db.Uuid
+  storeId           String               @db.Uuid
+  versionNumber     Int
+  status            CatalogVersionStatus @default(published)
+  publishedByUserId String?              @db.Uuid
+  publishedAt        DateTime?
+  basedOnVersionId   String?              @db.Uuid
+  packageData        Json
+  packageUrl         String?
+  packageChecksum    String
+  createdAt          DateTime             @default(now())
+
+  catalog          StoreCatalog   @relation("CatalogVersions", fields: [catalogId, storeId], references: [id, storeId], onDelete: Cascade)
+  store            Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  publishedBy      User?          @relation("CatalogVersionPublishedBy", fields: [publishedByUserId], references: [id], onDelete: SetNull)
+  basedOnVersion   CatalogVersion? @relation("CatalogVersionBase", fields: [basedOnVersionId], references: [id], onDelete: SetNull)
+  derivedVersions  CatalogVersion[] @relation("CatalogVersionBase")
+  currentForCatalog StoreCatalog[] @relation("CurrentCatalogVersion")
+  appliedByDevices ScaleDevice[]
+  requestedSyncLogs ScaleSyncLog[] @relation("ScaleSyncLogRequestedVersion")
+  deliveredSyncLogs ScaleSyncLog[] @relation("ScaleSyncLogDeliveredVersion")
+
+  @@unique([catalogId, versionNumber])
+  @@unique([catalogId, id])
+  @@index([catalogId])
+  @@index([storeId])
+  @@index([publishedByUserId])
+  @@index([publishedAt])
+  @@map("catalog_versions")
+}
+
+model ScaleDevice {
+  id                      String            @id @default(uuid()) @db.Uuid
+  storeId                 String            @db.Uuid
+  deviceCode              String            @unique
+  apiTokenHash            String
+  name                    String
+  model                   String?
+  status                  ScaleDeviceStatus @default(active)
+  lastSeenAt              DateTime?
+  lastSyncAt              DateTime?
+  currentCatalogVersionId String?           @db.Uuid
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+
+  store                 Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  currentCatalogVersion CatalogVersion? @relation(fields: [currentCatalogVersionId], references: [id], onDelete: SetNull)
+  syncLogs              ScaleSyncLog[]
+
+  @@index([storeId])
+  @@index([status])
+  @@index([currentCatalogVersionId])
+  @@map("scale_devices")
+}
+
+model ScaleSyncLog {
+  id                 String          @id @default(uuid()) @db.Uuid
+  scaleDeviceId      String?         @db.Uuid
+  storeId            String?         @db.Uuid
+  requestedVersionId String?         @db.Uuid
+  deliveredVersionId String?         @db.Uuid
+  status             ScaleSyncStatus
+  errorMessage       String?
+  requestIp          String?
+  userAgent          String?
+  createdAt          DateTime        @default(now())
+
+  scaleDevice      ScaleDevice?     @relation(fields: [scaleDeviceId], references: [id], onDelete: SetNull)
+  store            Store?           @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  requestedVersion CatalogVersion?  @relation("ScaleSyncLogRequestedVersion", fields: [requestedVersionId], references: [id], onDelete: SetNull)
+  deliveredVersion CatalogVersion?  @relation("ScaleSyncLogDeliveredVersion", fields: [deliveredVersionId], references: [id], onDelete: SetNull)
+
+  @@index([scaleDeviceId])
+  @@index([storeId])
+  @@index([requestedVersionId])
+  @@index([deliveredVersionId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("scale_sync_logs")
+}
+
+model FileAsset {
+  id               String   @id @default(uuid()) @db.Uuid
+  storeId          String?  @db.Uuid
+  originalFileName String
+  storagePath      String
+  publicUrl        String
+  mimeType         String
+  sizeBytes        BigInt
+  uploadedByUserId String?  @db.Uuid
+  createdAt        DateTime @default(now())
+
+  store             Store?                @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  uploadedBy        User?                 @relation("FileAssetUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  productImages     Product[]             @relation("ProductImageFileAsset")
+  advertisingImages AdvertisingBanner[]   @relation("BannerImageFileAsset")
+
+  @@index([storeId])
+  @@index([uploadedByUserId])
+  @@index([createdAt])
+  @@map("file_assets")
 }
