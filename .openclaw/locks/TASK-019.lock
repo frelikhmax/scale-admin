@@ -1,0 +1,5 @@
+TASK_ID=TASK-019
+BRANCH=task/TASK-019-scale-device-tokens
+OWNER=backend
+STATUS=assigned
+CREATED_BY=manager
