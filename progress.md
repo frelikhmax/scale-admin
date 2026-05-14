@@ -792,3 +792,23 @@ Notes:
 
 Next:
 - TASK-018 is unblocked after merge/push and after-task check.
+
+## 2026-05-14 22:42 — TASK-018 assignment
+
+Status: assigned
+Owner: backend
+Summary:
+- Manager resumed from repository source of truth and canonical A2A workflow docs under `docs/openclaw/` because root bootstrap files are not present in this checkout.
+- Preflight passed with warning that local `docker-compose.override.yml` is active; deterministic Docker verification will use the approved script and base compose file.
+- Selected TASK-018 because it is pending, high priority, and its dependency TASK-016 is done.
+- Assigned TASK-018 to backend because the scope is Store Details API, active StoreCatalog lookup, overview response, and server-side access checks.
+- Created task branch, lock, and backend handoff.
+
+Evidence:
+- Branch: `task/TASK-018-store-details-api`
+- Handoff: `.openclaw/handoffs/TASK-018-backend.md`
+- Lock: `.openclaw/locks/TASK-018.lock`
+- Preflight: `PREFLIGHT_RESULT=PASS`
+
+Next:
+- Delegate implementation to backend agent.
