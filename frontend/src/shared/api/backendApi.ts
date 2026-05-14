@@ -38,17 +38,32 @@ function messageFromData(data: unknown): string | undefined {
 }
 
 function normalizeError(error: FetchBaseQueryError): ApiError {
+  const backendMessage = messageFromData(error.data);
+
   if (error.status === 401) {
     return {
       status: 401,
-      message: 'Требуется авторизация. Войдите в систему и повторите запрос.',
+      message:
+        backendMessage === 'Invalid email or password'
+          ? 'Неверный email или пароль.'
+          : 'Требуется авторизация. Войдите в систему и повторите запрос.',
     };
   }
 
   if (error.status === 403) {
     return {
       status: 403,
-      message: 'Недостаточно прав для выполнения запроса.',
+      message:
+        backendMessage === 'CSRF token required or invalid'
+          ? 'Сессия формы истекла. Обновите страницу и повторите действие.'
+          : 'Недостаточно прав для выполнения запроса.',
+    };
+  }
+
+  if (error.status === 429) {
+    return {
+      status: 429,
+      message: 'Слишком много попыток. Подождите немного и повторите действие.',
     };
   }
 
@@ -82,7 +97,7 @@ function normalizeError(error: FetchBaseQueryError): ApiError {
 
   return {
     status: error.status,
-    message: messageFromData(error.data) ?? `Backend returned HTTP ${error.status}`,
+    message: backendMessage ?? `Backend returned HTTP ${error.status}`,
   };
 }
 
@@ -103,5 +118,6 @@ const backendBaseQuery: BaseQueryFn<string | FetchArgs, unknown, ApiError> = asy
 export const backendApi = createApi({
   reducerPath: 'backendApi',
   baseQuery: backendBaseQuery,
+  tagTypes: ['Session'],
   endpoints: () => ({}),
 });
