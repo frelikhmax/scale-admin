@@ -590,3 +590,53 @@ Next:
 - Merge task branch into `main` with `--no-ff`.
 - Push `main` and keep `task/TASK-011-password-reset-flow` open/pushed.
 - Run `scripts/openclaw-after-task-check.sh TASK-011`.
+
+## 2026-05-14 19:13 — TASK-012 assignment
+
+Status: assigned
+Owner: backend
+Summary:
+- Ran scripted preflight and received PREFLIGHT_RESULT=PASS.
+- Independently selected TASK-012 from tasks.json: status pending, high priority, dependency TASK-008 done, aligned with PRD users/access requirements, and earliest valid high-priority backend task after completed auth/invite/reset work.
+- Assigned TASK-012 to backend because scope is admin user-management API, RBAC enforcement, login blocking semantics, and AuditLog integration.
+- Created task branch and backend handoff/lock.
+
+Evidence:
+- Branch: task/TASK-012-admin-users-crud
+- Handoff: .openclaw/handoffs/TASK-012-backend.md
+- Lock: .openclaw/locks/TASK-012.lock
+- Preflight: PREFLIGHT_RESULT=PASS
+
+Next:
+- Backend implements TASK-012 on the task branch and reports implementation commits plus exact test results.
+
+## 2026-05-14 19:23 — TASK-012 — backend implementation and manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented TASK-012 in commit `61e1a82 feat: add admin users management`.
+- Manager inspected the implementation and confirmed admin-only `/api/users` endpoints for list/read, role change, block/unblock and soft delete.
+- Confirmed endpoints are protected by `SessionGuard`, `RolesGuard`, and `RequireRoles('admin')`.
+- Confirmed role/block/delete changes write AuditLog entries and revoke affected user sessions where required.
+- Confirmed existing auth login/session logic rejects blocked or deleted users.
+- Ran manager API verification for the required task test steps.
+- Ran approved Docker verification script and received `DOCKER_VERIFY_RESULT=PASS`.
+- Marked TASK-012 `status` as `done` in `tasks.json` only after successful manager and Docker verification.
+- Released `.openclaw/locks/TASK-012.lock`.
+
+Evidence:
+- Coordination commit: `71e9c96 chore: assign TASK-012 admin users crud`.
+- Implementation commit: `61e1a82 feat: add admin users management`.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validate: `DATABASE_URL=... npx prisma validate` passed.
+- Manager API verification: `TASK012_MANAGER_API_VERIFY=PASS`.
+- Task API checks passed: admin login, user list, role change, block, blocked login rejection, unblock, soft delete, deleted user excluded from active list, deleted login rejection, AuditLog actions present.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-012` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- User creation remains via invite flow; TASK-012 scope is admin list/read/update/block/unblock/soft-delete per acceptance criteria.
+- `GET /api/users?includeDeleted=true` can include soft-deleted users for admin inspection.
+
+Next:
+- TASK-013 is unblocked if dependencies are satisfied.
