@@ -10,7 +10,23 @@ import {
   type AuthUser,
 } from './features/auth/authApi';
 import { useGetHealthQuery } from './features/health/healthApi';
+import {
+  useCreateStoreMutation,
+  useGetStoreQuery,
+  useListStoresQuery,
+  useUpdateStoreMutation,
+  type Store,
+  type StoreFormValues,
+  type StoreStatus,
+} from './features/stores/storesApi';
 import './styles.css';
+
+type DashboardView =
+  | { name: 'overview' }
+  | { name: 'stores' }
+  | { name: 'store-details'; storeId: string }
+  | { name: 'store-create' }
+  | { name: 'store-edit'; storeId: string };
 
 function HealthStatus() {
   const { data: health, error, isLoading, isFetching, refetch } = useGetHealthQuery();
@@ -135,7 +151,281 @@ function LoginScreen() {
   );
 }
 
+function Navigation({ user, activeView, onNavigate }: { user: AuthUser; activeView: DashboardView; onNavigate: (view: DashboardView) => void }) {
+  const storesActive = activeView.name.startsWith('store');
+
+  return (
+    <nav className="app-nav" aria-label="Primary navigation">
+      <button
+        className={activeView.name === 'overview' ? 'nav-button nav-button-active' : 'nav-button'}
+        type="button"
+        onClick={() => onNavigate({ name: 'overview' })}
+      >
+        Overview
+      </button>
+      <button
+        className={storesActive ? 'nav-button nav-button-active' : 'nav-button'}
+        type="button"
+        onClick={() => onNavigate({ name: 'stores' })}
+      >
+        Stores
+      </button>
+      {user.role === 'admin' ? (
+        <button className="nav-button" type="button" onClick={() => onNavigate({ name: 'store-create' })}>
+          Create store
+        </button>
+      ) : (
+        <span className="nav-note">Operator navigation: assigned stores only</span>
+      )}
+    </nav>
+  );
+}
+
+function StoresList({ user, onNavigate }: { user: AuthUser; onNavigate: (view: DashboardView) => void }) {
+  const { data, error, isLoading, isFetching, refetch } = useListStoresQuery();
+  const stores = data?.stores ?? [];
+  const errorMessage = error && 'message' in error ? error.message : null;
+
+  return (
+    <section className="panel" aria-labelledby="stores-title">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">{user.role === 'admin' ? 'Admin stores' : 'Assigned stores'}</p>
+          <h2 id="stores-title">Stores</h2>
+          <p className="muted">
+            {user.role === 'admin'
+              ? 'Admins can see every non-archived store and manage store records.'
+              : 'Operators see only stores assigned to their account.'}
+          </p>
+        </div>
+        <div className="action-row">
+          <button className="secondary-button" type="button" onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? 'Refreshing...' : 'Refresh'}
+          </button>
+          {user.role === 'admin' && (
+            <button type="button" onClick={() => onNavigate({ name: 'store-create' })}>
+              Create store
+            </button>
+          )}
+        </div>
+      </div>
+
+      {isLoading && <div className="status status-loading">Loading stores via RTK Query...</div>}
+      {errorMessage && <div className="form-error" role="alert">{errorMessage}</div>}
+      {!isLoading && !errorMessage && stores.length === 0 && <div className="empty-state">No stores available.</div>}
+
+      {stores.length > 0 && (
+        <div className="store-list" data-testid="stores-list">
+          {stores.map((store) => (
+            <article className="store-card" key={store.id}>
+              <div>
+                <p className="store-code">{store.code}</p>
+                <h3>{store.name}</h3>
+                <p className="muted">{store.address || 'No address'} · {store.timezone}</p>
+              </div>
+              <div className="store-actions">
+                <span className={`badge badge-${store.status}`}>{store.status}</span>
+                <button className="secondary-button" type="button" onClick={() => onNavigate({ name: 'store-details', storeId: store.id })}>
+                  Details
+                </button>
+                {user.role === 'admin' && (
+                  <button className="secondary-button" type="button" onClick={() => onNavigate({ name: 'store-edit', storeId: store.id })}>
+                    Edit
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function StoreDetails({ user, storeId, onNavigate }: { user: AuthUser; storeId: string; onNavigate: (view: DashboardView) => void }) {
+  const { data, error, isLoading } = useGetStoreQuery(storeId);
+  const store = data?.store;
+  const errorMessage = error && 'message' in error ? error.message : null;
+
+  return (
+    <section className="panel" aria-labelledby="store-details-title">
+      <button className="link-button" type="button" onClick={() => onNavigate({ name: 'stores' })}>
+        ← Back to stores
+      </button>
+      {isLoading && <div className="status status-loading">Loading store details...</div>}
+      {errorMessage && <div className="form-error" role="alert">{errorMessage}</div>}
+      {store && (
+        <>
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Store details</p>
+              <h2 id="store-details-title">{store.name}</h2>
+              <p className="muted">{store.code}</p>
+            </div>
+            <div className="action-row">
+              <span className={`badge badge-${store.status}`}>{store.status}</span>
+              {user.role === 'admin' && (
+                <button type="button" onClick={() => onNavigate({ name: 'store-edit', storeId: store.id })}>
+                  Edit store
+                </button>
+              )}
+            </div>
+          </div>
+          <dl className="details-grid">
+            <div><dt>Address</dt><dd>{store.address || '—'}</dd></div>
+            <div><dt>Timezone</dt><dd>{store.timezone}</dd></div>
+            <div><dt>Created</dt><dd>{new Date(store.createdAt).toLocaleString()}</dd></div>
+            <div><dt>Updated</dt><dd>{new Date(store.updatedAt).toLocaleString()}</dd></div>
+          </dl>
+        </>
+      )}
+    </section>
+  );
+}
+
+function StoreForm({ mode, store, onCancel, onSaved }: { mode: 'create' | 'edit'; store?: Store; onCancel: () => void; onSaved: (store: Store) => void }) {
+  const [values, setValues] = useState<StoreFormValues>({
+    code: store?.code ?? '',
+    name: store?.name ?? '',
+    address: store?.address ?? '',
+    timezone: store?.timezone ?? 'Europe/Moscow',
+    status: store?.status ?? 'active',
+  });
+  const [formError, setFormError] = useState<string | null>(null);
+  const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
+  const [createStore, { isLoading: creating }] = useCreateStoreMutation();
+  const [updateStore, { isLoading: updating }] = useUpdateStoreMutation();
+  const isSaving = creating || updating;
+
+  function updateValue(field: keyof StoreFormValues, value: string) {
+    setValues((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+
+    if (!values.code.trim() || !values.name.trim()) {
+      setFormError('Store code and name are required.');
+      return;
+    }
+
+    const csrfData = csrf ?? (await refetchCsrf()).data;
+    if (!csrfData) {
+      setFormError('Не удалось подготовить защищённую форму. Повторите попытку.');
+      return;
+    }
+
+    const payload = {
+      ...values,
+      code: values.code.trim(),
+      name: values.name.trim(),
+      address: values.address?.trim(),
+      timezone: values.timezone?.trim() || 'Europe/Moscow',
+      status: values.status,
+      csrfToken: csrfData.csrfToken,
+      csrfHeaderName: csrfData.headerName,
+    };
+
+    try {
+      const response = mode === 'create'
+        ? await createStore(payload).unwrap()
+        : await updateStore({ ...payload, storeId: store!.id }).unwrap();
+      onSaved(response.store);
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : 'Store could not be saved.';
+      setFormError(message);
+    }
+  }
+
+  return (
+    <section className="panel" aria-labelledby="store-form-title">
+      <button className="link-button" type="button" onClick={onCancel}>← Back to stores</button>
+      <p className="eyebrow">{mode === 'create' ? 'Create store' : 'Edit store'}</p>
+      <h2 id="store-form-title">{mode === 'create' ? 'New store' : store?.name}</h2>
+
+      <form className="store-form" onSubmit={handleSubmit}>
+        <label>
+          Store code
+          <input value={values.code} onChange={(event) => updateValue('code', event.target.value)} placeholder="STORE-002" />
+        </label>
+        <label>
+          Store name
+          <input value={values.name} onChange={(event) => updateValue('name', event.target.value)} placeholder="Central Store" />
+        </label>
+        <label>
+          Address
+          <input value={values.address ?? ''} onChange={(event) => updateValue('address', event.target.value)} placeholder="City, street" />
+        </label>
+        <label>
+          Timezone
+          <input value={values.timezone ?? ''} onChange={(event) => updateValue('timezone', event.target.value)} placeholder="Europe/Moscow" />
+        </label>
+        <label>
+          Status
+          <select value={values.status} onChange={(event) => updateValue('status', event.target.value as StoreStatus)}>
+            <option value="active">active</option>
+            <option value="inactive">inactive</option>
+            <option value="archived">archived</option>
+          </select>
+        </label>
+
+        {formError && <div className="form-error" role="alert">{formError}</div>}
+        <div className="action-row">
+          <button type="submit" disabled={isSaving}>{isSaving ? 'Saving...' : 'Save store'}</button>
+          <button className="secondary-button" type="button" onClick={onCancel}>Cancel</button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function StoreEditRoute({ storeId, onNavigate }: { storeId: string; onNavigate: (view: DashboardView) => void }) {
+  const { data, error, isLoading } = useGetStoreQuery(storeId);
+  const errorMessage = error && 'message' in error ? error.message : null;
+
+  if (isLoading) {
+    return <section className="panel"><div className="status status-loading">Loading store for editing...</div></section>;
+  }
+
+  if (errorMessage || !data?.store) {
+    return <section className="panel"><div className="form-error" role="alert">{errorMessage ?? 'Store not found.'}</div></section>;
+  }
+
+  return (
+    <StoreForm
+      mode="edit"
+      store={data.store}
+      onCancel={() => onNavigate({ name: 'store-details', storeId })}
+      onSaved={(savedStore) => onNavigate({ name: 'store-details', storeId: savedStore.id })}
+    />
+  );
+}
+
+function DashboardContent({ user, view, onNavigate }: { user: AuthUser; view: DashboardView; onNavigate: (view: DashboardView) => void }) {
+  if (view.name === 'stores') {
+    return <StoresList user={user} onNavigate={onNavigate} />;
+  }
+
+  if (view.name === 'store-details') {
+    return <StoreDetails user={user} storeId={view.storeId} onNavigate={onNavigate} />;
+  }
+
+  if (view.name === 'store-create' && user.role === 'admin') {
+    return <StoreForm mode="create" onCancel={() => onNavigate({ name: 'stores' })} onSaved={(store) => onNavigate({ name: 'store-details', storeId: store.id })} />;
+  }
+
+  if (view.name === 'store-edit' && user.role === 'admin') {
+    return <StoreEditRoute storeId={view.storeId} onNavigate={onNavigate} />;
+  }
+
+  return <HealthStatus />;
+}
+
 function Dashboard({ user }: { user: AuthUser }) {
+  const [view, setView] = useState<DashboardView>({ name: 'overview' });
   const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
   const [logout, { isLoading: logoutLoading, error: logoutError }] = useLogoutMutation();
 
@@ -166,9 +456,9 @@ function Dashboard({ user }: { user: AuthUser }) {
         </button>
       </section>
 
+      <Navigation user={user} activeView={view} onNavigate={setView} />
       {logoutErrorMessage && <div className="form-error" role="alert">{logoutErrorMessage}</div>}
-
-      <HealthStatus />
+      <DashboardContent user={user} view={view} onNavigate={setView} />
     </main>
   );
 }
