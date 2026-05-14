@@ -65,6 +65,13 @@ export class StoresController {
     return this.storesService.getStore(storeId);
   }
 
+  @Get(':storeId/details')
+  @RequireRoles('admin', 'operator')
+  @RequireStoreAccess('storeId', 'params')
+  getStoreDetails(@Param('storeId') storeId: string) {
+    return this.storesService.getStoreDetails(storeId);
+  }
+
   @Patch(':storeId')
   @RequireRoles('admin')
   updateStore(@Param('storeId') storeId: string, @Body() body: UpdateStoreBody, @Req() request: any, @CurrentUser() user: AuthenticatedUser) {

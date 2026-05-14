@@ -60,6 +60,74 @@ export class StoresService {
     return { store: this.toStoreResponse(store) };
   }
 
+  async getStoreDetails(storeId: string) {
+    const store = await this.findStoreById(storeId);
+    const [activeCatalog, catalogCount, scaleDeviceCount, activeScaleDeviceCount, recentSyncLogs] = await Promise.all([
+      this.prisma.storeCatalog.findFirst({
+        where: {
+          storeId: store.id,
+          status: 'active',
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.storeCatalog.count({ where: { storeId: store.id } }),
+      this.prisma.scaleDevice.count({ where: { storeId: store.id } }),
+      this.prisma.scaleDevice.count({ where: { storeId: store.id, status: 'active' } }),
+      this.prisma.scaleSyncLog.findMany({
+        where: { storeId: store.id },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          status: true,
+          errorMessage: true,
+          requestedVersionId: true,
+          deliveredVersionId: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    if (!activeCatalog) {
+      throw new NotFoundException('Active store catalog not found');
+    }
+
+    return {
+      store: this.toStoreResponse(store),
+      activeCatalog: {
+        id: activeCatalog.id,
+        storeId: activeCatalog.storeId,
+        name: activeCatalog.name,
+        status: activeCatalog.status,
+        currentVersionId: activeCatalog.currentVersionId,
+        createdAt: activeCatalog.createdAt.toISOString(),
+        updatedAt: activeCatalog.updatedAt.toISOString(),
+      },
+      overview: {
+        catalogCount,
+        activeCatalogId: activeCatalog.id,
+        currentVersionId: activeCatalog.currentVersionId,
+        scaleDeviceCount,
+        activeScaleDeviceCount,
+        recentSyncLogCount: recentSyncLogs.length,
+      },
+      scales: {
+        total: scaleDeviceCount,
+        active: activeScaleDeviceCount,
+      },
+      syncLogs: {
+        recent: recentSyncLogs.map((log) => ({
+          id: log.id,
+          status: log.status,
+          errorMessage: log.errorMessage,
+          requestedVersionId: log.requestedVersionId,
+          deliveredVersionId: log.deliveredVersionId,
+          createdAt: log.createdAt.toISOString(),
+        })),
+      },
+    };
+  }
+
   async createStore(input: CreateStoreInput, actorUserId: string, context: RequestContext) {
     const code = this.requireCode(input.code);
     const name = this.requireName(input.name);
