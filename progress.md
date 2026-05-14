@@ -11,7 +11,7 @@
 
 ## Active task
 
-None.
+TASK-006 — assigned to frontend on branch `task/TASK-006-integration-layer-typescript-rtk-query-client`.
 
 ## Completed tasks
 
@@ -439,3 +439,25 @@ Notes:
 Next:
 - Merge `task/TASK-008-session-rbac-store-access` into `main` with `--no-ff`.
 - TASK-009, TASK-012, TASK-013, TASK-016, TASK-021, and TASK-029 are unblocked after merge.
+
+## 2026-05-14 14:14 — TASK-006 assignment
+
+Status: assigned
+Owner: frontend
+Summary:
+- Ran `scripts/openclaw-preflight.sh`; result PASS with no warnings/failures.
+- Selected script-provided next task TASK-006, agent frontend, branch `task/TASK-006-integration-layer-typescript-rtk-query-client`.
+- Created per-task branch before coordination changes.
+- Created frontend handoff and assignment lock.
+- Tester/reviewer are excluded by workflow for this assignment.
+
+Evidence:
+- Handoff: `.openclaw/handoffs/TASK-006-frontend.md`
+- Lock: `.openclaw/locks/TASK-006.lock`
+- Dependency: TASK-001 is done in `tasks.json`.
+- Preflight: `PREFLIGHT_RESULT=PASS`, `WARNING_COUNT=0`, `FAILURE_COUNT=0`.
+
+Next:
+- Send executable A2A assignment to frontend.
+- Frontend implements TASK-006, commits implementation changes, runs test steps, and reports exact results.
+
