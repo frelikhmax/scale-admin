@@ -11,13 +11,14 @@
 
 ## Active task
 
-- TASK-004 — assigned to backend.
+None.
 
 ## Completed tasks
 
 - TASK-001 — done and verified.
 - TASK-002 — done and manager-verified.
 - TASK-003 — done and manager-verified.
+- TASK-004 — done and manager-verified.
 
 ## Notes
 
@@ -210,3 +211,32 @@ Evidence:
 Next:
 - Send executable A2A assignment to backend.
 - Backend implements TASK-004, commits implementation changes, runs test steps, and reports exact results.
+
+## 2026-05-14 07:50 — TASK-004 — backend implementation and manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented TASK-004 and committed `2385b90 feat: add Prisma business domain models` without marking `tasks.json` done.
+- Manager inspected Prisma schema and migration for the required business-domain models, relationships and unique constraints.
+- Confirmed required models exist: Store, StoreCatalog, Product, Category, CatalogProductPlacement, StoreProductPrice, AdvertisingBanner, CatalogVersion, ScaleDevice, ScaleSyncLog and FileAsset.
+- Confirmed required unique constraints exist for Store.code, Product.defaultPluCode, ScaleDevice.deviceCode and CatalogVersion versionNumber inside catalogId.
+- Confirmed migration state, Prisma validation, client generation, backend build, required table/index presence and test record creation.
+- Marked TASK-004 `status` as `done` in `tasks.json` after manager verification of required test steps.
+- Released `.openclaw/locks/TASK-004.lock`.
+
+Evidence:
+- Implementation commit inspected: `2385b90 feat: add Prisma business domain models`.
+- Migration/sync check: `DATABASE_URL=... npx prisma migrate dev --name verify_task_004 --skip-generate` reported already in sync with no pending migration.
+- Prisma validate: `DATABASE_URL=... npx prisma validate` passed.
+- Prisma generate: `DATABASE_URL=... npx prisma generate` passed.
+- Backend build: `cd backend && npm run build` passed.
+- SQL/Prisma table check confirmed: advertising_banners, catalog_product_placements, catalog_versions, categories, file_assets, products, scale_devices, scale_sync_logs, store_catalogs, store_product_prices, stores.
+- SQL/Prisma index check confirmed: stores_code_key, products_defaultPluCode_key, scale_devices_deviceCode_key, catalog_versions_catalogId_versionNumber_key.
+- Prisma Client creation check created and cleaned up Store, StoreCatalog and Product records successfully.
+
+Notes:
+- Manager could not run `docker compose down -v` because this Telegram runtime cannot access the Docker daemon socket and elevated tools are unavailable. Verification used the available local PostgreSQL connection and Prisma migration state instead.
+
+Next:
+- TASK-005 is unblocked.
