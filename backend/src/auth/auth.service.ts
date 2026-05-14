@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AppConfiguration } from '../config/app.config';
@@ -9,6 +9,11 @@ import type { AuthenticatedUser } from './auth.types';
 type RequestContext = {
   ipAddress?: string;
   userAgent?: string;
+};
+
+type UserCredentialForLogin = {
+  failedLoginCount: number;
+  lockedUntil: Date | null;
 };
 
 type CookieOptions = {
@@ -73,23 +78,17 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    if (user.credential.lockedUntil && user.credential.lockedUntil > new Date()) {
-      throw new UnauthorizedException('Invalid email or password');
+    const now = new Date();
+    if (user.credential.lockedUntil && user.credential.lockedUntil > now) {
+      this.throwLoginThrottled(user.credential.lockedUntil);
     }
 
     const passwordValid = verifyPassword(password, user.credential);
     if (!passwordValid) {
-      await this.prisma.userCredential.update({
-        where: { userId: user.id },
-        data: {
-          failedLoginCount: { increment: 1 },
-          lastFailedLoginAt: new Date(),
-        },
-      });
+      await this.recordFailedLogin(user.id, user.credential, now);
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const now = new Date();
     const sessionToken = createSessionToken();
     const sessionTokenHash = hashSessionToken(sessionToken);
     const expiresAt = new Date(now.getTime() + this.absoluteTimeoutMs);
@@ -226,6 +225,41 @@ export class AuthService {
     });
 
     return result.count;
+  }
+
+  private async recordFailedLogin(userId: string, credential: UserCredentialForLogin, now: Date): Promise<void> {
+    const failedLoginCount = credential.failedLoginCount + 1;
+    const shouldLock = failedLoginCount >= this.appConfig.authFailedLoginMaxAttempts;
+    const lockedUntil = shouldLock
+      ? new Date(now.getTime() + this.appConfig.authFailedLoginLockMinutes * 60 * 1000)
+      : null;
+
+    await this.prisma.userCredential.update({
+      where: { userId },
+      data: {
+        failedLoginCount,
+        lastFailedLoginAt: now,
+        lockedUntil,
+      },
+    });
+
+    if (lockedUntil) {
+      this.throwLoginThrottled(lockedUntil);
+    }
+  }
+
+  private throwLoginThrottled(lockedUntil: Date): never {
+    const retryAfterSeconds = Math.max(Math.ceil((lockedUntil.getTime() - Date.now()) / 1000), 1);
+    throw new HttpException(
+      {
+        message: 'Too many failed login attempts. Please retry later.',
+        error: 'Too Many Requests',
+        code: 'LOGIN_TEMPORARILY_LOCKED',
+        retryAfterSeconds,
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+      },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
 
   private async revokeSessionById(sessionId: string, revokedReason: string) {

@@ -1,5 +1,9 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { CsrfService } from './csrf.service';
+import { RateLimit } from './rate-limit.decorator';
+import { RateLimitGuard } from './rate-limit.guard';
+import { getCookie, getHeader } from './cookie.util';
 
 type LoginBody = {
   email?: unknown;
@@ -8,10 +12,26 @@ type LoginBody = {
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly csrfService: CsrfService,
+  ) {}
+
+  @Get('csrf')
+  getCsrfToken(@Res({ passthrough: true }) response: any) {
+    const csrfToken = this.csrfService.issueToken();
+    response.cookie(this.csrfService.getCookieName(), csrfToken, this.csrfService.getCookieOptions());
+
+    return {
+      csrfToken,
+      headerName: this.csrfService.getHeaderName(),
+    };
+  }
 
   @Post('login')
   @HttpCode(200)
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ bucket: 'login' })
   async login(@Body() body: LoginBody, @Req() request: any, @Res({ passthrough: true }) response: any) {
     const result = await this.authService.login(String(body.email ?? ''), String(body.password ?? ''), {
       ipAddress: this.getRequestIp(request),
@@ -54,29 +74,10 @@ export class AuthController {
   }
 
   private getHeader(request: any, name: string): string | undefined {
-    const header = request.headers?.[name];
-    if (Array.isArray(header)) {
-      return header.join(', ');
-    }
-
-    return typeof header === 'string' ? header : undefined;
+    return getHeader(request, name);
   }
 
   private getCookie(request: any, cookieName: string): string | undefined {
-    const cookieHeader = this.getHeader(request, 'cookie');
-    if (!cookieHeader) {
-      return undefined;
-    }
-
-    const cookies = cookieHeader.split(';');
-    for (const cookie of cookies) {
-      const [rawName, ...rawValueParts] = cookie.trim().split('=');
-      if (rawName === cookieName) {
-        const rawValue = rawValueParts.join('=');
-        return rawValue ? decodeURIComponent(rawValue) : undefined;
-      }
-    }
-
-    return undefined;
+    return getCookie(request, cookieName);
   }
 }

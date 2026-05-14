@@ -8,6 +8,13 @@ export interface EnvironmentVariables {
   SESSION_COOKIE_NAME: string;
   SESSION_IDLE_TIMEOUT_MINUTES: number;
   SESSION_ABSOLUTE_TIMEOUT_DAYS: number;
+  CSRF_COOKIE_NAME: string;
+  CSRF_HEADER_NAME: string;
+  AUTH_RATE_LIMIT_WINDOW_SECONDS: number;
+  AUTH_LOGIN_RATE_LIMIT_MAX: number;
+  AUTH_ACTION_RATE_LIMIT_MAX: number;
+  AUTH_FAILED_LOGIN_MAX_ATTEMPTS: number;
+  AUTH_FAILED_LOGIN_LOCK_MINUTES: number;
 }
 
 const allowedNodeEnvironments: NodeEnvironment[] = ['development', 'test', 'production'];
@@ -67,6 +74,13 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
   const sessionCookieName = optionalString(config, 'SESSION_COOKIE_NAME', 'scale_admin_session');
   const sessionIdleTimeoutMinutes = optionalPositiveInteger(config, 'SESSION_IDLE_TIMEOUT_MINUTES', 30, errors);
   const sessionAbsoluteTimeoutDays = optionalPositiveInteger(config, 'SESSION_ABSOLUTE_TIMEOUT_DAYS', 14, errors);
+  const csrfCookieName = optionalString(config, 'CSRF_COOKIE_NAME', 'scale_admin_csrf');
+  const csrfHeaderName = optionalString(config, 'CSRF_HEADER_NAME', 'x-csrf-token').toLowerCase();
+  const authRateLimitWindowSeconds = optionalPositiveInteger(config, 'AUTH_RATE_LIMIT_WINDOW_SECONDS', 60, errors);
+  const authLoginRateLimitMax = optionalPositiveInteger(config, 'AUTH_LOGIN_RATE_LIMIT_MAX', 5, errors);
+  const authActionRateLimitMax = optionalPositiveInteger(config, 'AUTH_ACTION_RATE_LIMIT_MAX', 10, errors);
+  const authFailedLoginMaxAttempts = optionalPositiveInteger(config, 'AUTH_FAILED_LOGIN_MAX_ATTEMPTS', 5, errors);
+  const authFailedLoginLockMinutes = optionalPositiveInteger(config, 'AUTH_FAILED_LOGIN_LOCK_MINUTES', 15, errors);
 
   if (nodeEnv && !allowedNodeEnvironments.includes(nodeEnv)) {
     errors.push(`NODE_ENV must be one of: ${allowedNodeEnvironments.join(', ')}`);
@@ -106,5 +120,12 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
     SESSION_COOKIE_NAME: sessionCookieName,
     SESSION_IDLE_TIMEOUT_MINUTES: sessionIdleTimeoutMinutes,
     SESSION_ABSOLUTE_TIMEOUT_DAYS: sessionAbsoluteTimeoutDays,
+    CSRF_COOKIE_NAME: csrfCookieName,
+    CSRF_HEADER_NAME: csrfHeaderName,
+    AUTH_RATE_LIMIT_WINDOW_SECONDS: authRateLimitWindowSeconds,
+    AUTH_LOGIN_RATE_LIMIT_MAX: authLoginRateLimitMax,
+    AUTH_ACTION_RATE_LIMIT_MAX: authActionRateLimitMax,
+    AUTH_FAILED_LOGIN_MAX_ATTEMPTS: authFailedLoginMaxAttempts,
+    AUTH_FAILED_LOGIN_LOCK_MINUTES: authFailedLoginLockMinutes,
   };
 }
