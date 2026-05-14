@@ -42,48 +42,6 @@ def print_section(title):
         print()
         print(f"===== {title} =====")
 
-def slugify(task):
-    raw = " ".join([
-        str(task.get("id", "")),
-        str(task.get("category", "")),
-        str(task.get("description", "")),
-        " ".join(task.get("acceptance_criteria", [])),
-    ]).lower()
-
-    words = re.findall(r"[a-z0-9]+", raw)
-    stop = {
-        "task", "add", "create", "implement", "with", "and", "for", "the",
-        "to", "of", "a", "an", "in", "on", "by", "or", "api", "mvp",
-        "backend", "frontend"
-    }
-    words = [w for w in words if w not in stop and not re.fullmatch(r"\d+", w)]
-
-    if not words:
-        fallback = str(task.get("category", "task")).lower()
-        words = re.findall(r"[a-z0-9]+", fallback) or ["task"]
-
-    return "-".join(words[:6])
-
-def suggest_agent(task):
-    text = " ".join([
-        str(task.get("category", "")),
-        str(task.get("description", "")),
-        " ".join(task.get("acceptance_criteria", [])),
-        " ".join(task.get("test_steps", [])),
-    ]).lower()
-
-    if task.get("category") == "ui":
-        return "frontend"
-
-    frontend_markers = [
-        "frontend", "react", "vite", "rtk", "query", "ui", "page",
-        "tab", "dashboard", "login ui", "navigation", "route"
-    ]
-    if any(marker in text for marker in frontend_markers):
-        return "frontend"
-
-    return "backend"
-
 print_section("REPO")
 branch = git(["branch", "--show-current"])[1]
 status = git(["status", "--porcelain"])[1]
@@ -137,9 +95,6 @@ if active_locks:
 
 print_section("TASKS")
 tasks_path = repo / "tasks.json"
-next_task = None
-next_agent = None
-next_branch = None
 done_ids = []
 pending_count = 0
 
@@ -156,31 +111,21 @@ else:
         pending = [t for t in tasks if t.get("status") == "pending"]
         pending_count = len(pending)
 
-        valid = []
-        for index, task in enumerate(tasks):
+        valid_count = 0
+        for task in tasks:
             if task.get("status") != "pending":
                 continue
             deps = task.get("dependencies", [])
             if all(dep in done for dep in deps):
-                valid.append((rank.get(task.get("priority", "low"), 99), index, task))
+                valid_count += 1
 
-        if not valid:
+        if valid_count == 0:
             add_fail("no valid pending task with dependencies done")
-        else:
-            _, _, next_task = sorted(valid, key=lambda item: (item[0], item[1]))[0]
-            next_agent = suggest_agent(next_task)
-            next_branch = f"task/{next_task['id']}-{slugify(next_task)}"
 
-            if not json_mode:
-                print(f"DONE_COUNT={len(done_ids)}")
-                print(f"PENDING_COUNT={pending_count}")
-                print(f"NEXT_TASK_ID={next_task['id']}")
-                print(f"NEXT_TASK_PRIORITY={next_task.get('priority')}")
-                print(f"NEXT_TASK_CATEGORY={next_task.get('category')}")
-                print(f"NEXT_TASK_DESCRIPTION={next_task.get('description')}")
-                print(f"NEXT_TASK_AGENT={next_agent}")
-                print(f"NEXT_TASK_BRANCH={next_branch}")
-                print(f"NEXT_TASK_DEPENDENCIES={','.join(next_task.get('dependencies', [])) or 'none'}")
+        if not json_mode:
+            print(f"DONE_COUNT={len(done_ids)}")
+            print(f"PENDING_COUNT={pending_count}")
+            print(f"VALID_PENDING_TASK_COUNT={valid_count}")
     except Exception as exc:
         add_fail(f"failed to parse tasks.json: {exc}")
 
@@ -222,15 +167,6 @@ payload = {
     "activeLocks": active_locks,
     "doneCount": len(done_ids),
     "pendingCount": pending_count,
-    "nextTask": None if not next_task else {
-        "id": next_task.get("id"),
-        "priority": next_task.get("priority"),
-        "category": next_task.get("category"),
-        "description": next_task.get("description"),
-        "dependencies": next_task.get("dependencies", []),
-        "agent": next_agent,
-        "branch": next_branch,
-    },
     "dockerPreviewOverride": docker_preview_status,
     "warnings": warnings,
     "failures": failures,
@@ -241,10 +177,6 @@ if json_mode:
 else:
     print_section("RESULT")
     print(f"PREFLIGHT_RESULT={result}")
-    if next_task:
-        print(f"NEXT_TASK_ID={next_task.get('id')}")
-        print(f"NEXT_TASK_AGENT={next_agent}")
-        print(f"NEXT_TASK_BRANCH={next_branch}")
     print(f"WARNING_COUNT={len(warnings)}")
     for item in warnings:
         print(f"WARN={item}")
