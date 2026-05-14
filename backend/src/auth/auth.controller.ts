@@ -28,6 +28,15 @@ type AcceptInviteBody = {
   fullName?: unknown;
 };
 
+type RequestPasswordResetBody = {
+  email?: unknown;
+};
+
+type ConfirmPasswordResetBody = {
+  token?: unknown;
+  password?: unknown;
+};
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -94,6 +103,34 @@ export class AuthController {
         token: String(body.token ?? ''),
         password: String(body.password ?? ''),
         fullName: typeof body.fullName === 'string' ? body.fullName : undefined,
+      },
+      {
+        ipAddress: this.getRequestIp(request),
+        userAgent: this.getHeader(request, 'user-agent'),
+      },
+    );
+  }
+
+  @Post('password-reset/request')
+  @HttpCode(200)
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ bucket: 'password-reset' })
+  async requestPasswordReset(@Body() body: RequestPasswordResetBody, @Req() request: any) {
+    return this.authService.requestPasswordReset(String(body.email ?? ''), {
+      ipAddress: this.getRequestIp(request),
+      userAgent: this.getHeader(request, 'user-agent'),
+    });
+  }
+
+  @Post('password-reset/confirm')
+  @HttpCode(200)
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ bucket: 'password-reset' })
+  async confirmPasswordReset(@Body() body: ConfirmPasswordResetBody, @Req() request: any) {
+    return this.authService.confirmPasswordReset(
+      {
+        token: String(body.token ?? ''),
+        password: String(body.password ?? ''),
       },
       {
         ipAddress: this.getRequestIp(request),

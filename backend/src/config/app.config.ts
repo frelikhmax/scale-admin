@@ -15,6 +15,7 @@ export interface AppConfiguration {
   authActionRateLimitMax: number;
   authFailedLoginMaxAttempts: number;
   authFailedLoginLockMinutes: number;
+  passwordResetTokenTtlMinutes: number;
 }
 
 export default registerAs(
@@ -34,5 +35,6 @@ export default registerAs(
     authActionRateLimitMax: Number(process.env.AUTH_ACTION_RATE_LIMIT_MAX || 10),
     authFailedLoginMaxAttempts: Number(process.env.AUTH_FAILED_LOGIN_MAX_ATTEMPTS || 5),
     authFailedLoginLockMinutes: Number(process.env.AUTH_FAILED_LOGIN_LOCK_MINUTES || 15),
+    passwordResetTokenTtlMinutes: Number(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES || 60),
   }),
 );
