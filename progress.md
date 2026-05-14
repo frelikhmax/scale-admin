@@ -674,3 +674,24 @@ Commits:
 Notes:
 - Duplicate active grants are intentionally idempotent, matching task acceptance of refusal or idempotent result without duplicates.
 - No frontend UI was implemented; TASK-015 remains the UI follow-up after its dependencies.
+
+## 2026-05-14 20:03 — TASK-014 assignment
+
+Status: assigned
+Owner: frontend
+Summary:
+- Manager ran the scripted preflight and got `PREFLIGHT_RESULT=PASS`.
+- Selected TASK-014 because it is pending, high priority, dependencies TASK-006 and TASK-007 are done, and it unlocks later UI tasks.
+- Assigned TASK-014 to frontend because the scope is Login UI, logout, frontend session state and protected frontend routes.
+- Created task branch `task/TASK-014-login-ui-session-state` from `main`.
+- Created frontend handoff and assignment lock for TASK-014.
+
+Evidence:
+- Handoff: .openclaw/handoffs/TASK-014-frontend.md
+- Lock: .openclaw/locks/TASK-014.lock
+- Dependency: TASK-006 and TASK-007 are done in tasks.json.
+- Preflight: PREFLIGHT_RESULT=PASS with docker-compose.override.yml warning.
+
+Next:
+- Send executable A2A assignment to frontend.
+- Frontend implements TASK-014, commits implementation changes, runs test steps, and reports exact results.
