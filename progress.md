@@ -562,3 +562,31 @@ Next:
 - Merge task branch into `main` with `--no-ff`.
 - Push `main` and keep `task/TASK-010-invite-flow` open/pushed.
 - Run `scripts/openclaw-after-task-check.sh TASK-010`.
+
+## 2026-05-14 18:59 — TASK-011 — backend implementation and manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Manager selected TASK-011 after preflight because it was the next valid high-priority pending task with dependency TASK-009 done.
+- Backend implemented TASK-011 in commit `767e5ce feat: add password reset flow` without marking `tasks.json` done.
+- Manager inspected implementation and confirmed password-reset request and confirmation endpoints.
+- Confirmed password reset tokens are random and stored only as SHA-256 hashes.
+- Confirmed reset tokens reject invalid, expired, and already-used tokens.
+- Confirmed successful reset updates `passwordChangedAt`, resets failed-login lock state, and revokes active sessions.
+- Confirmed audit logs are written for request/completion without raw token or password leakage.
+- Confirmed `PASSWORD_RESET_TOKEN_TTL_MINUTES` is documented and validated.
+- Marked TASK-011 `status` as `done` in `tasks.json` after manager verification and Docker verification.
+
+Evidence:
+- Coordination commit: `e454be4 chore: assign TASK-011 password reset flow`.
+- Implementation commit inspected: `767e5ce feat: add password reset flow`.
+- Manager build: `cd backend && npm run build` passed.
+- Prisma validate: `DATABASE_URL=postgresql://scale_admin:scale_admin_password@localhost:5432/scale_admin npx prisma validate` passed.
+- Backend-reported focused API checks: CSRF 200, old-password login before reset 200, reset request 200, rawTokenStoredCount=0, hashedTokenStoredCount=1, reset confirm 200, pre-reset session 401, old-password login after reset 401, new-password login 200, token reuse 409, expired token 400.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-011` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Next:
+- Merge task branch into `main` with `--no-ff`.
+- Push `main` and keep `task/TASK-011-password-reset-flow` open/pushed.
+- Run `scripts/openclaw-after-task-check.sh TASK-011`.
