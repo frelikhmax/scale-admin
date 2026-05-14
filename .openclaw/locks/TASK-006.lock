@@ -1,6 +1,0 @@
-TASK_ID=TASK-006
-AGENT=frontend
-BRANCH=task/TASK-006-integration-layer-typescript-rtk-query-client
-STATUS=assigned
-CREATED_AT=2026-05-14T14:14:00+02:00
-HANDOFF=.openclaw/handoffs/TASK-006-frontend.md
