@@ -1,9 +1,10 @@
-import { HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AppConfiguration } from '../config/app.config';
-import { verifyPassword } from './password.util';
+import { hashPassword, verifyPassword } from './password.util';
 import { createSessionToken, hashSessionToken } from './session-token.util';
+import { createInviteToken, hashInviteToken } from './invite-token.util';
 import type { AuthenticatedUser } from './auth.types';
 
 type RequestContext = {
@@ -22,6 +23,19 @@ type CookieOptions = {
   secure: boolean;
   path: string;
   maxAge: number;
+};
+
+type CreateInviteInput = {
+  email: string;
+  role: string;
+  expiresAt: string;
+  fullName?: string;
+};
+
+type AcceptInviteInput = {
+  token: string;
+  password: string;
+  fullName?: string;
 };
 
 @Injectable()
@@ -191,6 +205,164 @@ export class AuthService {
     return true;
   }
 
+  async createInvite(input: CreateInviteInput, actorUserId: string | undefined, context: RequestContext) {
+    const email = this.requireEmail(input.email);
+    const emailNormalized = this.normalizeEmail(email);
+    const role = this.requireRole(input.role);
+    const expiresAt = this.requireDate(input.expiresAt, 'expiresAt');
+    const token = createInviteToken();
+    const tokenHash = hashInviteToken(token);
+
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        emailNormalized,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (existingUser) {
+      throw new ConflictException('User with this email already exists');
+    }
+
+    const invite = await this.prisma.$transaction(async (tx) => {
+      const createdInvite = await tx.userInvite.create({
+        data: {
+          email,
+          role,
+          tokenHash,
+          invitedByUserId: actorUserId,
+          expiresAt,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action: 'user_invite.created',
+          entityType: 'UserInvite',
+          entityId: createdInvite.id,
+          afterData: {
+            email,
+            role,
+            expiresAt: expiresAt.toISOString(),
+          },
+          metadata: {
+            emailNormalized,
+          },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+
+      return createdInvite;
+    });
+
+    return {
+      invite: {
+        id: invite.id,
+        email: invite.email,
+        role: invite.role,
+        expiresAt: invite.expiresAt.toISOString(),
+        acceptedAt: invite.acceptedAt?.toISOString() ?? null,
+        createdAt: invite.createdAt.toISOString(),
+      },
+      token,
+    };
+  }
+
+  async acceptInvite(input: AcceptInviteInput, context: RequestContext) {
+    const token = this.requireToken(input.token);
+    const password = this.requirePassword(input.password);
+    const tokenHash = hashInviteToken(token);
+    const now = new Date();
+
+    const invite = await this.prisma.userInvite.findUnique({ where: { tokenHash } });
+    if (!invite) {
+      throw new BadRequestException('Invitation is invalid');
+    }
+    if (invite.acceptedAt) {
+      throw new ConflictException('Invitation has already been accepted');
+    }
+    if (invite.expiresAt <= now) {
+      throw new BadRequestException('Invitation has expired');
+    }
+
+    const emailNormalized = this.normalizeEmail(invite.email);
+    const fullName = this.requireFullName(input.fullName, invite.email);
+    const passwordData = hashPassword(password);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const existingUser = await tx.user.findFirst({
+        where: {
+          emailNormalized,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (existingUser) {
+        throw new ConflictException('User with this email already exists');
+      }
+
+      const acceptedInvite = await tx.userInvite.update({
+        where: { id: invite.id },
+        data: { acceptedAt: now },
+      });
+
+      const user = await tx.user.create({
+        data: {
+          email: invite.email,
+          emailNormalized,
+          emailVerifiedAt: now,
+          fullName,
+          role: invite.role,
+          status: 'active',
+          createdByUserId: invite.invitedByUserId,
+        },
+      });
+
+      await tx.userCredential.create({
+        data: {
+          userId: user.id,
+          ...passwordData,
+          passwordChangedAt: now,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: user.id,
+          action: 'user_invite.accepted',
+          entityType: 'UserInvite',
+          entityId: acceptedInvite.id,
+          afterData: {
+            userId: user.id,
+            email: user.email,
+            role: user.role,
+            acceptedAt: now.toISOString(),
+          },
+          metadata: {
+            emailNormalized,
+          },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+
+      return { user, invite: acceptedInvite };
+    });
+
+    return {
+      user: this.toSafeUser(result.user),
+      invite: {
+        id: result.invite.id,
+        email: result.invite.email,
+        role: result.invite.role,
+        expiresAt: result.invite.expiresAt.toISOString(),
+        acceptedAt: result.invite.acceptedAt?.toISOString() ?? null,
+      },
+    };
+  }
+
   async canAccessStore(userId: string, role: string, storeId: string): Promise<boolean> {
     if (role === 'admin') {
       return true;
@@ -270,6 +442,59 @@ export class AuthService {
         revokedReason,
       },
     });
+  }
+
+  private requireEmail(email: string): string {
+    const trimmedEmail = typeof email === 'string' ? email.trim() : '';
+    const normalizedEmail = this.normalizeEmail(trimmedEmail);
+    if (!normalizedEmail || !normalizedEmail.includes('@')) {
+      throw new BadRequestException('Valid email is required');
+    }
+
+    return trimmedEmail;
+  }
+
+  private requireRole(role: string): 'admin' | 'operator' {
+    if (role === 'admin' || role === 'operator') {
+      return role;
+    }
+
+    throw new BadRequestException('Role must be admin or operator');
+  }
+
+  private requireDate(value: string, fieldName: string): Date {
+    const date = new Date(value);
+    if (!value || Number.isNaN(date.getTime())) {
+      throw new BadRequestException(`${fieldName} must be a valid date`);
+    }
+
+    return date;
+  }
+
+  private requireToken(token: string): string {
+    const normalizedToken = typeof token === 'string' ? token.trim() : '';
+    if (!normalizedToken) {
+      throw new BadRequestException('Invitation token is required');
+    }
+
+    return normalizedToken;
+  }
+
+  private requirePassword(password: string): string {
+    if (typeof password !== 'string' || password.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters');
+    }
+
+    return password;
+  }
+
+  private requireFullName(fullName: string | undefined, email: string): string {
+    const normalizedFullName = typeof fullName === 'string' ? fullName.trim() : '';
+    if (normalizedFullName) {
+      return normalizedFullName;
+    }
+
+    return email.split('@')[0]?.trim() || email;
   }
 
   private normalizeEmail(email: string): string {
