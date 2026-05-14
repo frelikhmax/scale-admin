@@ -143,6 +143,151 @@ export class UsersService {
     return { user: this.toSafeUser(updatedUser), changed: true };
   }
 
+  async listStoreAccesses(userId: string) {
+    await this.findUserById(userId, true);
+    const accesses = await this.prisma.userStoreAccess.findMany({
+      where: { userId },
+      include: { store: true, grantedBy: true },
+      orderBy: [{ revokedAt: 'asc' }, { createdAt: 'desc' }],
+    });
+
+    return {
+      storeAccesses: accesses.map((access) => this.toStoreAccess(access)),
+    };
+  }
+
+  async grantStoreAccess(userId: string, storeId: string, actorUserId: string, context: RequestContext) {
+    const user = await this.findUserById(userId, false);
+    if (user.role !== 'operator') {
+      throw new BadRequestException('Store access can only be granted to operator users');
+    }
+
+    const store = await this.findStoreById(storeId);
+    const existingAccess = await this.prisma.userStoreAccess.findFirst({
+      where: {
+        userId,
+        storeId,
+        revokedAt: null,
+      },
+      include: { store: true, grantedBy: true },
+    });
+
+    if (existingAccess) {
+      return {
+        storeAccess: this.toStoreAccess(existingAccess),
+        granted: false,
+        duplicateActiveAccess: true,
+      };
+    }
+
+    const access = await this.prisma.$transaction(async (tx) => {
+      const createdAccess = await tx.userStoreAccess.create({
+        data: {
+          userId,
+          storeId,
+          grantedByUserId: actorUserId,
+        },
+        include: { store: true, grantedBy: true },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action: 'user_store_access.granted',
+          entityType: 'UserStoreAccess',
+          entityId: createdAccess.id,
+          storeId,
+          afterData: {
+            userId,
+            storeId,
+            grantedByUserId: actorUserId,
+          },
+          metadata: {
+            userEmail: user.email,
+            storeCode: store.code,
+          },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+
+      return createdAccess;
+    });
+
+    await this.authService.revokeUserSessions(userId, 'store_access_changed');
+
+    return {
+      storeAccess: this.toStoreAccess(access),
+      granted: true,
+      duplicateActiveAccess: false,
+    };
+  }
+
+  async revokeStoreAccess(userId: string, storeId: string, actorUserId: string, context: RequestContext) {
+    const user = await this.findUserById(userId, false);
+    if (user.role !== 'operator') {
+      throw new BadRequestException('Store access can only be revoked from operator users');
+    }
+
+    const store = await this.findStoreById(storeId);
+    const existingAccess = await this.prisma.userStoreAccess.findFirst({
+      where: {
+        userId,
+        storeId,
+        revokedAt: null,
+      },
+      include: { store: true, grantedBy: true },
+    });
+
+    if (!existingAccess) {
+      throw new NotFoundException('Active store access not found');
+    }
+
+    const now = new Date();
+    const access = await this.prisma.$transaction(async (tx) => {
+      const revokedAccess = await tx.userStoreAccess.update({
+        where: { id: existingAccess.id },
+        data: { revokedAt: now },
+        include: { store: true, grantedBy: true },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action: 'user_store_access.revoked',
+          entityType: 'UserStoreAccess',
+          entityId: existingAccess.id,
+          storeId,
+          beforeData: {
+            userId,
+            storeId,
+            revokedAt: existingAccess.revokedAt?.toISOString() ?? null,
+          },
+          afterData: {
+            userId,
+            storeId,
+            revokedAt: now.toISOString(),
+          },
+          metadata: {
+            userEmail: user.email,
+            storeCode: store.code,
+          },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+
+      return revokedAccess;
+    });
+
+    await this.authService.revokeUserSessions(userId, 'store_access_changed');
+
+    return {
+      storeAccess: this.toStoreAccess(access),
+      revoked: true,
+    };
+  }
+
   async softDeleteUser(userId: string, actorUserId: string, context: RequestContext) {
     if (userId === actorUserId) {
       throw new ConflictException('Admins cannot delete their own user');
@@ -176,6 +321,19 @@ export class UsersService {
     await this.authService.revokeUserSessions(user.id, 'user_deleted');
 
     return { user: this.toSafeUser(updatedUser), deleted: true };
+  }
+
+  private async findStoreById(storeId: string) {
+    if (!storeId) {
+      throw new BadRequestException('Store id is required');
+    }
+
+    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
+    if (!store || store.status === 'archived') {
+      throw new NotFoundException('Store not found');
+    }
+
+    return store;
   }
 
   private async findUserById(userId: string, includeDeleted: boolean): Promise<SafeUserRecord> {
@@ -217,6 +375,39 @@ export class UsersService {
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
       deletedAt: user.deletedAt?.toISOString() ?? null,
+    };
+  }
+
+  private toStoreAccess(access: {
+    id: string;
+    userId: string;
+    storeId: string;
+    grantedByUserId: string | null;
+    createdAt: Date;
+    revokedAt: Date | null;
+    store: { id: string; code: string; name: string; status: string };
+    grantedBy: { id: string; email: string; fullName: string } | null;
+  }) {
+    return {
+      id: access.id,
+      userId: access.userId,
+      storeId: access.storeId,
+      grantedByUserId: access.grantedByUserId,
+      createdAt: access.createdAt.toISOString(),
+      revokedAt: access.revokedAt?.toISOString() ?? null,
+      store: {
+        id: access.store.id,
+        code: access.store.code,
+        name: access.store.name,
+        status: access.store.status,
+      },
+      grantedBy: access.grantedBy
+        ? {
+            id: access.grantedBy.id,
+            email: access.grantedBy.email,
+            fullName: access.grantedBy.fullName,
+          }
+        : null,
     };
   }
 }
