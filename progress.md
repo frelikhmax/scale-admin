@@ -843,3 +843,35 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-018`.
+
+## 2026-05-15 00:08 — TASK-019 — ScaleDevice registration and token management
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented TASK-019 in commit `d0d5f2d feat: add scale device token management` without marking `tasks.json` done.
+- Added admin-only ScaleDevice registration endpoint for store devices.
+- Added status management for active/inactive/blocked/archived devices.
+- Added apiToken regeneration that stores only `apiTokenHash` and invalidates the old token hash.
+- Create/regenerate responses return `apiToken` once and omit `apiTokenHash` from device responses.
+- Device operations write AuditLog entries without plaintext tokens or apiTokenHash values.
+- Manager verified code scope, build, Prisma schema, source-level acceptance criteria, backend-reported API/DB checks, and deterministic Docker verification.
+- Marked TASK-019 `status` as `done` after manager verification and Docker verification passed.
+- Released `.openclaw/locks/TASK-019.lock`.
+
+Evidence:
+- Coordination commit: `cf80e5c chore: assign TASK-019 scale device tokens`.
+- Implementation commit inspected: `d0d5f2d feat: add scale device token management`.
+- Changed files inspected: `backend/src/scales/scale-token.util.ts`, `backend/src/scales/scales.controller.ts`, `backend/src/scales/scales.module.ts`, `backend/src/scales/scales.service.ts`.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validate: `DATABASE_URL=... npx prisma validate` passed.
+- Whitespace check: `git diff --check cf80e5c..HEAD` passed.
+- Backend reported focused API/DB checks: create device `201`, duplicate deviceCode `409`, block/deactivate status `200`, regenerate token `201`, old token invalid at hash level, new token valid at hash level, AuditLog entries present without token/hash secrets.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-019` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Device self-auth endpoint was not added; TASK-019 covers admin registration/status/token management and token rotation semantics.
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+
+Next:
+- Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-019`.
