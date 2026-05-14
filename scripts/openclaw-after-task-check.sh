@@ -60,26 +60,6 @@ def print_section(title):
         print()
         print(f"===== {title} =====")
 
-def suggest_agent(task):
-    text = " ".join([
-        str(task.get("category", "")),
-        str(task.get("description", "")),
-        " ".join(task.get("acceptance_criteria", [])),
-        " ".join(task.get("test_steps", [])),
-    ]).lower()
-
-    if task.get("category") == "ui":
-        return "frontend"
-
-    frontend_markers = [
-        "frontend", "react", "vite", "rtk", "query", "ui", "page",
-        "tab", "dashboard", "login ui", "navigation", "route"
-    ]
-    if any(marker in text for marker in frontend_markers):
-        return "frontend"
-
-    return "backend"
-
 print_section("REPO")
 branch = git(["branch", "--show-current"])[1]
 status = git(["status", "--porcelain"])[1]
@@ -121,8 +101,6 @@ else:
 print_section("TASK STATUS")
 tasks_path = repo / "tasks.json"
 task = None
-next_task = None
-next_agent = None
 
 if not tasks_path.exists():
     add_fail("tasks.json not found")
@@ -142,23 +120,6 @@ else:
             if task.get("status") != "done":
                 add_fail(f"{task_id} status is not done: {task.get('status')}")
 
-        rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        done = {t.get("id") for t in tasks if t.get("status") == "done"}
-        valid = []
-        for index, candidate in enumerate(tasks):
-            if candidate.get("status") != "pending":
-                continue
-            deps = candidate.get("dependencies", [])
-            if all(dep in done for dep in deps):
-                valid.append((rank.get(candidate.get("priority", "low"), 99), index, candidate))
-
-        if valid:
-            _, _, next_task = sorted(valid, key=lambda item: (item[0], item[1]))[0]
-            next_agent = suggest_agent(next_task)
-            if not json_mode:
-                print(f"NEXT_TASK_ID={next_task.get('id')}")
-                print(f"NEXT_TASK_AGENT={next_agent}")
-                print(f"NEXT_TASK_DESCRIPTION={next_task.get('description')}")
     except Exception as exc:
         add_fail(f"failed to parse tasks.json: {exc}")
 
@@ -257,12 +218,6 @@ payload = {
     "mergeCommit": merge_commit,
     "mergeSubject": merge_subject,
     "includedCommits": included_commits,
-    "nextTask": None if not next_task else {
-        "id": next_task.get("id"),
-        "priority": next_task.get("priority"),
-        "description": next_task.get("description"),
-        "agent": next_agent,
-    },
     "warnings": warnings,
     "failures": failures,
 }
@@ -275,10 +230,7 @@ else:
     print(f"TASK_ID={task_id}")
     if merge_commit:
         print(f"MERGE_COMMIT={merge_commit}")
-    if next_task:
-        print(f"NEXT_TASK_ID={next_task.get('id')}")
-        print(f"NEXT_TASK_AGENT={next_agent}")
-    print(f"WARNING_COUNT={len(warnings)}")
+        print(f"WARNING_COUNT={len(warnings)}")
     for item in warnings:
         print(f"WARN={item}")
     print(f"FAILURE_COUNT={len(failures)}")
