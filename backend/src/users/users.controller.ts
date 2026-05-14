@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RequireRoles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -9,6 +9,10 @@ import { UsersService } from './users.service';
 
 type ChangeRoleBody = {
   role?: unknown;
+};
+
+type GrantStoreAccessBody = {
+  storeId?: unknown;
 };
 
 @Controller('users')
@@ -45,6 +49,31 @@ export class UsersController {
   @Patch(':userId/unblock')
   unblockUser(@Param('userId') userId: string, @Req() request: any, @CurrentUser() actor: AuthenticatedUser) {
     return this.usersService.unblockUser(userId, actor.id, this.getRequestContext(request));
+  }
+
+  @Get(':userId/store-accesses')
+  listStoreAccesses(@Param('userId') userId: string) {
+    return this.usersService.listStoreAccesses(userId);
+  }
+
+  @Post(':userId/store-accesses')
+  grantStoreAccess(
+    @Param('userId') userId: string,
+    @Body() body: GrantStoreAccessBody,
+    @Req() request: any,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.usersService.grantStoreAccess(userId, String(body.storeId ?? ''), actor.id, this.getRequestContext(request));
+  }
+
+  @Delete(':userId/store-accesses/:storeId')
+  revokeStoreAccess(
+    @Param('userId') userId: string,
+    @Param('storeId') storeId: string,
+    @Req() request: any,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.usersService.revokeStoreAccess(userId, storeId, actor.id, this.getRequestContext(request));
   }
 
   @Delete(':userId')
