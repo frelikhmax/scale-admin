@@ -7,15 +7,17 @@
 - Manager coordinates tasks, handoffs, implementation assignments and progress updates using the strict 3-bot workflow: manager, backend, frontend.
 - TASK-001 is fully closed and verified done.
 - TASK-002 is fully closed and verified done by manager.
+- TASK-003 is fully closed and verified done by manager.
 
 ## Active task
 
-None.
+- TASK-004 — assigned to backend.
 
 ## Completed tasks
 
 - TASK-001 — done and verified.
 - TASK-002 — done and manager-verified.
+- TASK-003 — done and manager-verified.
 
 ## Notes
 
@@ -185,3 +187,26 @@ Notes:
 
 Next:
 - TASK-004 is unblocked.
+
+## 2026-05-14 07:38 — TASK-004 assignment
+
+Status: assigned
+Owner: backend
+Summary:
+- Resynced repository source of truth before assignment.
+- Confirmed repository was clean via `git status --porcelain=v1`.
+- Confirmed no active lock files existed in `.openclaw/locks/`.
+- Selected TASK-004 because it is the next pending critical task and its only dependency TASK-003 is done.
+- Assigned TASK-004 to backend because the scope is Prisma business-domain database models and migration.
+- Created backend handoff and assignment lock for TASK-004.
+- Tester/reviewer are excluded by workflow for this assignment.
+
+Evidence:
+- Handoff: .openclaw/handoffs/TASK-004-backend.md
+- Lock: .openclaw/locks/TASK-004.lock
+- Dependency: TASK-003 is done in tasks.json.
+- Recent closure commit: 6492950 test: mark TASK-003 verified done.
+
+Next:
+- Send executable A2A assignment to backend.
+- Backend implements TASK-004, commits implementation changes, runs test steps, and reports exact results.
