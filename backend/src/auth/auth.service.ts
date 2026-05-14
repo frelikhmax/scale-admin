@@ -4,18 +4,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { AppConfiguration } from '../config/app.config';
 import { verifyPassword } from './password.util';
 import { createSessionToken, hashSessionToken } from './session-token.util';
+import type { AuthenticatedUser } from './auth.types';
 
 type RequestContext = {
   ipAddress?: string;
   userAgent?: string;
-};
-
-type SafeUser = {
-  id: string;
-  email: string;
-  fullName: string;
-  role: string;
-  status: string;
 };
 
 type CookieOptions = {
@@ -175,6 +168,7 @@ export class AuthService {
 
     return {
       session: {
+        id: session.id,
         createdAt: session.createdAt,
         lastUsedAt: now,
         expiresAt: session.expiresAt,
@@ -198,6 +192,42 @@ export class AuthService {
     return true;
   }
 
+  async canAccessStore(userId: string, role: string, storeId: string): Promise<boolean> {
+    if (role === 'admin') {
+      return true;
+    }
+
+    if (role !== 'operator') {
+      return false;
+    }
+
+    const activeAccess = await this.prisma.userStoreAccess.findFirst({
+      where: {
+        userId,
+        storeId,
+        revokedAt: null,
+      },
+      select: { id: true },
+    });
+
+    return Boolean(activeAccess);
+  }
+
+  async revokeUserSessions(userId: string, revokedReason = 'permission_changed'): Promise<number> {
+    const result = await this.prisma.userSession.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+        revokedReason,
+      },
+    });
+
+    return result.count;
+  }
+
   private async revokeSessionById(sessionId: string, revokedReason: string) {
     await this.prisma.userSession.update({
       where: { id: sessionId },
@@ -212,12 +242,12 @@ export class AuthService {
     return typeof email === 'string' ? email.trim().toLowerCase() : '';
   }
 
-  private toSafeUser(user: { id: string; email: string; fullName: string; role: string; status: string }): SafeUser {
+  private toSafeUser(user: { id: string; email: string; fullName: string; role: string; status: string }): AuthenticatedUser {
     return {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
-      role: user.role,
+      role: user.role === 'admin' ? 'admin' : 'operator',
       status: user.status,
     };
   }

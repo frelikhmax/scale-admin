@@ -370,3 +370,72 @@ Notes:
 Next:
 - Merge `task/TASK-007-login-sessions` into `main` with `--no-ff`.
 - TASK-008 and TASK-009 are unblocked after merge.
+
+## 2026-05-14 13:31 — TASK-008 assignment
+
+Status: assigned
+Owner: backend
+Summary:
+- Resynced repository source of truth before assignment.
+- Confirmed repository was on `main`, clean, and had no active lock files.
+- Ran `git pull --ff-only` on `main`; repository was already up to date.
+- Selected TASK-008 because it is the highest-priority pending task with all dependencies done.
+- Verified dependency TASK-007 is done in `tasks.json`.
+- Created task branch `task/TASK-008-session-rbac-store-access` before coordination changes.
+- Assigned TASK-008 to backend because the scope is backend session guard, RBAC, and store access enforcement.
+- Created backend handoff and assignment lock for TASK-008.
+- Tester/reviewer are excluded by workflow for this assignment.
+
+Evidence:
+- Handoff: .openclaw/handoffs/TASK-008-backend.md
+- Lock: .openclaw/locks/TASK-008.lock
+- Dependency: TASK-007 is done in tasks.json.
+- Recent closure/merge commit: 5bdcbb2 merge: complete TASK-007 login sessions.
+
+Next:
+- Send executable A2A assignment to backend.
+- Backend implements TASK-008 on `task/TASK-008-session-rbac-store-access`, commits implementation changes, runs test steps, and reports exact results.
+
+## 2026-05-14 13:47 — TASK-008 — backend implementation and manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented TASK-008 and committed `434b958 feat: add session RBAC store access guards` without marking `tasks.json` done.
+- Manager reviewed implementation files and confirmed scope stayed within backend session guards, RBAC guards/decorators, store access guard, reusable session revocation helper, and minimal verification endpoints.
+- Confirmed protected store endpoints require a valid active cookie-backed session.
+- Confirmed operator can access only the assigned store through active `UserStoreAccess` and receives 403 for a foreign store.
+- Confirmed admin can access both stores and admin-only endpoint.
+- Confirmed unauthenticated requests to protected endpoint return 401.
+- Marked TASK-008 `status` as `done` in `tasks.json` after manager verification of required test steps.
+- Released `.openclaw/locks/TASK-008.lock`.
+
+Evidence:
+- Coordination commit: `aaae25a chore: assign TASK-008 to backend`.
+- Implementation commit inspected: `434b958 feat: add session RBAC store access guards`.
+- Changed files reviewed: backend/src/auth/auth.module.ts, backend/src/auth/auth.service.ts, backend/src/auth/auth.types.ts, backend/src/auth/cookie.util.ts, backend/src/auth/current-session.decorator.ts, backend/src/auth/current-user.decorator.ts, backend/src/auth/roles.decorator.ts, backend/src/auth/roles.guard.ts, backend/src/auth/session.guard.ts, backend/src/auth/store-access.decorator.ts, backend/src/auth/store-access.guard.ts, backend/src/stores/stores.controller.ts, backend/src/stores/stores.module.ts.
+- `tasks.json` was unchanged by backend implementation before manager closure.
+- Diff check: `git diff --check aaae25a..HEAD` passed.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validate: `DATABASE_URL=... npx prisma validate` passed.
+- Manager test setup: reset local database, ran seed with manager verification password, created an operator with active access to one store and a second foreign store.
+- HTTP verification on `http://localhost:3021`:
+  - operator login returned 200.
+  - operator assigned store access returned 200.
+  - operator foreign store access returned 403 with `Store access denied`.
+  - operator admin-only check returned 403.
+  - admin login returned 200.
+  - admin assigned store access returned 200.
+  - admin foreign store access returned 200.
+  - admin-only check returned 200.
+  - no-cookie protected store access returned 401 with `Authentication required`.
+- Verification server on port 3021 was stopped after checks.
+- Git status before closure was clean.
+
+Notes:
+- TASK-008 adds minimal `/api/stores/*/access-check` and `/api/stores/admin-check` verification endpoints; full Stores CRUD remains for TASK-016.
+- CSRF protection and rate limiting remain for TASK-009.
+
+Next:
+- Merge `task/TASK-008-session-rbac-store-access` into `main` with `--no-ff`.
+- TASK-009, TASK-012, TASK-013, TASK-016, TASK-021, and TASK-029 are unblocked after merge.
