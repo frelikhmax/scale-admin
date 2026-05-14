@@ -763,3 +763,32 @@ Commits:
 Notes:
 - Main catalog creation is implemented for active stores at creation time, matching TASK-016 acceptance criteria.
 - No hard delete endpoint was added because TASK-016 acceptance criteria require create/edit Store CRUD behavior and do not specify deletion semantics.
+
+## 2026-05-14 22:35 — TASK-017 — Stores UI and Admin/Operator navigation
+
+Status: done
+Owner: frontend
+Summary:
+- Frontend implemented TASK-017 in commit `07f41ce feat: add stores UI navigation` without marking `tasks.json` done.
+- Added Stores UI using the existing RTK Query backend API layer.
+- Added role-aware navigation: admin sees store management actions; operator sees assigned-stores navigation context.
+- Added store list, store details transition, create store form and edit store form.
+- Manager verified code scope, frontend build/typecheck, source-level acceptance criteria and deterministic Docker verification.
+- Marked TASK-017 `status` as `done` after manager verification and Docker verification passed.
+- Released `.openclaw/locks/TASK-017.lock`.
+
+Evidence:
+- Coordination commit: `bb17ad8 chore: assign TASK-017 stores ui navigation`.
+- Implementation commit inspected: `07f41ce feat: add stores UI navigation`.
+- Changed files inspected: `frontend/src/features/stores/storesApi.ts`, `frontend/src/main.tsx`, `frontend/src/shared/api/backendApi.ts`, `frontend/src/styles.css`.
+- Frontend build/typecheck: `cd frontend && npm run build` passed.
+- Typecheck: `cd frontend && npm exec tsc -- -b` passed as part of verification/build gate.
+- Whitespace check: `git diff --check bb17ad8..HEAD` passed.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-017` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- UI behavior was verified through source/bundle and API evidence because no browser automation tool was available in this session.
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+
+Next:
+- TASK-018 is unblocked after merge/push and after-task check.
