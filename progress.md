@@ -240,3 +240,64 @@ Notes:
 
 Next:
 - TASK-005 is unblocked.
+
+## 2026-05-14 08:23 — TASK-005 assignment
+
+Status: assigned
+Owner: backend
+Summary:
+- Resynced repository source of truth before assignment.
+- Confirmed repository was on `main`, clean, and had no active lock files.
+- Ran `git pull --ff-only` on `main`; repository was already up to date.
+- Selected TASK-005 because it is the highest-priority pending task with all dependencies done.
+- Verified dependency TASK-004 is done in `tasks.json`.
+- Created task branch `task/TASK-005-seed-admin-data` before coordination changes.
+- Assigned TASK-005 to backend because the scope is Prisma/backend seed infrastructure.
+- Created backend handoff and assignment lock for TASK-005.
+- Tester/reviewer are excluded by workflow for this assignment.
+
+Evidence:
+- Handoff: .openclaw/handoffs/TASK-005-backend.md
+- Lock: .openclaw/locks/TASK-005.lock
+- Dependency: TASK-004 is done in tasks.json.
+- Recent closure commit: 8773034 test: mark TASK-004 verified done.
+
+Next:
+- Send executable A2A assignment to backend.
+- Backend implements TASK-005 on `task/TASK-005-seed-admin-data`, commits implementation changes, runs test steps, and reports exact results.
+
+## 2026-05-14 08:37 — TASK-005 — backend implementation and manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented TASK-005 and committed `5d9d807 feat: add repeatable Prisma seed` without marking `tasks.json` done.
+- Manager reviewed changed files and confirmed scope is limited to seed/docs/package wiring.
+- Confirmed implementation creates a local admin user with a credential record and PBKDF2-SHA512 password hash.
+- Confirmed seed is idempotent: second seed run reused existing IDs and did not create duplicate users, credentials, store, catalog, or products.
+- Confirmed seed secrets are documented in `backend/.env.example` and README, with env override support.
+- Marked TASK-005 `status` as `done` in `tasks.json` after manager verification of required test steps.
+- Released `.openclaw/locks/TASK-005.lock`.
+
+Evidence:
+- Coordination commit: `01d86fa chore: assign TASK-005 to backend`.
+- Implementation commit inspected: `5d9d807 feat: add repeatable Prisma seed`.
+- Branch check: manager stayed on `task/TASK-005-seed-admin-data` through verification and closure.
+- Changed files reviewed: README.md, backend/.env.example, backend/package.json, backend/package-lock.json, backend/prisma.config.ts, backend/prisma/seed.js.
+- `tasks.json` was unchanged by backend implementation before manager closure.
+- Clean database reset: `DATABASE_URL=... npx prisma migrate reset --force --skip-seed` passed and applied TASK-003/TASK-004 migrations.
+- First seed: `DATABASE_URL=... npm run prisma:seed` passed and created admin/sample data.
+- Second seed: `DATABASE_URL=... npm run prisma:seed` passed; IDs matched first run and `passwordUpdated` was false.
+- Verification query confirmed: users=1, credentials=1, stores=1, catalogs=1, products=3, adminRole=admin, adminStatus=active, passwordHashAlgorithm=pbkdf2_sha512, hasPlaintextPassword=false.
+- Prisma validate: `DATABASE_URL=... npx prisma validate` passed.
+- Seed syntax check: `node -c prisma/seed.js` passed.
+- Backend build: `npm run build` passed.
+- Git status before closure was clean.
+
+Notes:
+- Manager attempted an isolated temporary verification database first, but `psql` is not installed in this runtime. Verification therefore used the available local `scale_admin` database with `prisma migrate reset`.
+- Existing seeded admin password is intentionally not rotated on repeated seed runs unless `SEED_ADMIN_RESET_PASSWORD=true` is set.
+
+Next:
+- Merge `task/TASK-005-seed-admin-data` into `main` with `--no-ff`.
+- TASK-007 is unblocked after merge.
