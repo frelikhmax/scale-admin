@@ -171,7 +171,7 @@ if selected_ref:
         add_fail(f"{selected_ref} is not merged into main")
 
 if not remote_task_refs:
-    add_warn(f"no remote origin task branch found for {task_id}")
+    add_fail(f"no remote origin task branch found for {task_id}")
 
 merge_rc, merge_out, _ = git(["log", "main", "--merges", "--format=%H %s", f"--grep={task_id}", "-n", "1"])
 merge_commit = None
