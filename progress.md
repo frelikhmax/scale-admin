@@ -674,3 +674,50 @@ Commits:
 Notes:
 - Duplicate active grants are intentionally idempotent, matching task acceptance of refusal or idempotent result without duplicates.
 - No frontend UI was implemented; TASK-015 remains the UI follow-up after its dependencies.
+
+## 2026-05-14 20:03 — TASK-014 assignment
+
+Status: assigned
+Owner: frontend
+Summary:
+- Manager ran the scripted preflight and got `PREFLIGHT_RESULT=PASS`.
+- Selected TASK-014 because it is pending, high priority, dependencies TASK-006 and TASK-007 are done, and it unlocks later UI tasks.
+- Assigned TASK-014 to frontend because the scope is Login UI, logout, frontend session state and protected frontend routes.
+- Created task branch `task/TASK-014-login-ui-session-state` from `main`.
+- Created frontend handoff and assignment lock for TASK-014.
+
+Evidence:
+- Handoff: .openclaw/handoffs/TASK-014-frontend.md
+- Lock: .openclaw/locks/TASK-014.lock
+- Dependency: TASK-006 and TASK-007 are done in tasks.json.
+- Preflight: PREFLIGHT_RESULT=PASS with docker-compose.override.yml warning.
+
+Next:
+- Send executable A2A assignment to frontend.
+- Frontend implements TASK-014, commits implementation changes, runs test steps, and reports exact results.
+
+## 2026-05-14 20:22 — TASK-014 — frontend implementation and manager closure
+
+Status: done
+Owner: frontend
+Summary:
+- Frontend implemented TASK-014 in commit `d97318b feat: add login session UI` without marking `tasks.json` done.
+- Manager inspected implementation files and confirmed Login UI, Dashboard session gate, logout action, frontend session state, auth RTK Query endpoints, CSRF support, shared backend API credentials, invalid-password message mapping and preserved health panel.
+- Manager ran frontend build/typecheck and focused API checks for login, session, logout, post-logout protection and invalid-password handling.
+- Manager ran approved Docker verification script successfully.
+- Marked TASK-014 `status` as `done` in `tasks.json` after manager verification and Docker verification passed.
+- Released `.openclaw/locks/TASK-014.lock`.
+
+Evidence:
+- Implementation commit inspected: `d97318b feat: add login session UI`.
+- Frontend build: `cd frontend && npm run build` passed.
+- Typecheck: `cd frontend && npm exec tsc -- -b` passed.
+- Source checks confirmed `credentials: 'include'`, `/auth/csrf`, `/auth/session`, `/auth/login`, `/auth/logout`, Login, Dashboard, Logout, invalid-password UI mapping and Health endpoint text.
+- API checks against local backend passed: login `200`, session `200`, logout `200`, post-logout session `401`, invalid password `401`.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-014` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- During manager verification, sourcing backend `.env` printed a harmless shell parsing warning for the unquoted `SEED_ADMIN_FULL_NAME=Local Admin`; verification still used the configured seed password and passed.
+
+Next:
+- Merge task branch to `main`, push `main`, then run `scripts/openclaw-after-task-check.sh TASK-014`.
