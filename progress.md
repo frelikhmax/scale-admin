@@ -487,3 +487,52 @@ Next:
 - Merge task branch into `main` with `--no-ff`.
 - Run `scripts/openclaw-after-task-check.sh TASK-006`.
 
+## 2026-05-14 15:57 — TASK-009 assignment
+
+Status: assigned
+Owner: backend
+Summary:
+- Ran `scripts/openclaw-preflight.sh`; result PASS with no warnings/failures.
+- Treated preflight as deterministic repository-state verification only, not task-selection authority.
+- Read `tasks.json`, checked dependencies and priorities, and selected TASK-009 as the first/highest-priority valid pending task.
+- Chose backend because TASK-009 concerns CSRF protection and rate limiting for web auth API endpoints.
+- Created per-task branch before coordination changes.
+- Created backend handoff and assignment lock.
+- Tester/reviewer are excluded by workflow for this assignment.
+
+Evidence:
+- Handoff: `.openclaw/handoffs/TASK-009-backend.md`
+- Lock: `.openclaw/locks/TASK-009.lock`
+- Dependency: TASK-007 is done in `tasks.json`.
+- Preflight: `PREFLIGHT_RESULT=PASS`, `WARNING_COUNT=0`, `FAILURE_COUNT=0`.
+
+Next:
+- Send executable A2A assignment to backend.
+- Backend implements TASK-009, commits implementation changes, runs test steps, and reports exact results.
+
+## 2026-05-14 16:13 — TASK-009 — backend implementation and manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Backend reported TASK-009 implemented and self-tested in commit `03bb272 feat: add csrf and auth rate limiting` without marking `tasks.json` done.
+- Manager reviewed implementation files and confirmed global CSRF protection for state-changing HTTP methods.
+- Confirmed `GET /api/auth/csrf` issues a double-submit CSRF token and login/logout require valid CSRF protection.
+- Confirmed reusable auth rate-limit primitives exist for login and future password-reset/invite-accept endpoints.
+- Confirmed repeated failed login attempts persist throttling via `UserCredential.lockedUntil` and return clear 429 API errors.
+- Accepted user-provided SSH Docker verification evidence: `DOCKER_VERIFY_RESULT=PASS` from `scripts/openclaw-docker-verify.sh TASK-009`.
+- Marked TASK-009 `status` as `done` in `tasks.json` after manager verification.
+- Released `.openclaw/locks/TASK-009.lock`.
+
+Evidence:
+- Coordination commit: `d06de0a chore: assign TASK-009 csrf rate limit`.
+- Implementation commit inspected: `03bb272 feat: add csrf and auth rate limiting`.
+- Manager build: `npm --prefix backend run build` passed.
+- Prisma validate: `DATABASE_URL=postgresql://scale_admin:scale_admin_password@localhost:5432/scale_admin npx prisma validate` passed.
+- Backend report curl checks: POST login without CSRF 403, GET CSRF token 200, POST login with valid CSRF 200, POST logout with valid CSRF 200, repeated bad login attempts 429, login rate limit 429, GET session did not mutate session count.
+- Docker verification: `DOCKER_VERIFY_RESULT=PASS` provided by user for `scripts/openclaw-docker-verify.sh TASK-009`.
+
+Next:
+- Merge task branch into `main` with `--no-ff`.
+- Run `scripts/openclaw-after-task-check.sh TASK-009`.
+
