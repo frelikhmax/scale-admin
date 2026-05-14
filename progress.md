@@ -536,3 +536,29 @@ Next:
 - Merge task branch into `main` with `--no-ff`.
 - Run `scripts/openclaw-after-task-check.sh TASK-009`.
 
+
+## 2026-05-14 18:46 — TASK-010 — backend implementation and manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented TASK-010 in commit `4f28391 feat: implement user invite flow` without marking `tasks.json` done.
+- Manager inspected the implementation and confirmed admin-only invite creation at `POST /api/auth/invites`.
+- Confirmed public invite acceptance at `POST /api/auth/invites/accept` with the `invite-accept` rate-limit bucket.
+- Confirmed invite tokens are randomly generated and only SHA-256 hashes are stored in `UserInvite.tokenHash`.
+- Confirmed accepting an invite creates an active user and credential with a hashed password.
+- Confirmed expired invites and already accepted invites are rejected.
+- Confirmed invite creation and acceptance write `AuditLog` records without storing raw tokens or passwords.
+- Marked TASK-010 `status` as `done` in `tasks.json` after manager verification and Docker verification.
+
+Evidence:
+- Coordination commit existed on task branch before implementation.
+- Implementation commit inspected: `4f28391 feat: implement user invite flow`.
+- Manager build: `cd backend && npm run build` passed.
+- Code inspection: `backend/src/auth/auth.controller.ts`, `backend/src/auth/auth.service.ts`, `backend/src/auth/invite-token.util.ts`, `backend/src/auth/password.util.ts`.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-010` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Next:
+- Merge task branch into `main` with `--no-ff`.
+- Push `main` and keep `task/TASK-010-invite-flow` open/pushed.
+- Run `scripts/openclaw-after-task-check.sh TASK-010`.

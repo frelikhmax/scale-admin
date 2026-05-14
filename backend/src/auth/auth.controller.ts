@@ -1,13 +1,31 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CsrfService } from './csrf.service';
+import { CurrentUser } from './current-user.decorator';
 import { RateLimit } from './rate-limit.decorator';
 import { RateLimitGuard } from './rate-limit.guard';
+import { RequireRoles } from './roles.decorator';
+import { RolesGuard } from './roles.guard';
+import { SessionGuard } from './session.guard';
 import { getCookie, getHeader } from './cookie.util';
+import type { AuthenticatedUser } from './auth.types';
 
 type LoginBody = {
   email?: unknown;
   password?: unknown;
+};
+
+type CreateInviteBody = {
+  email?: unknown;
+  role?: unknown;
+  expiresAt?: unknown;
+  fullName?: unknown;
+};
+
+type AcceptInviteBody = {
+  token?: unknown;
+  password?: unknown;
+  fullName?: unknown;
 };
 
 @Controller('auth')
@@ -44,6 +62,44 @@ export class AuthController {
       user: result.user,
       expiresAt: result.expiresAt.toISOString(),
     };
+  }
+
+  @Post('invites')
+  @HttpCode(201)
+  @UseGuards(SessionGuard, RolesGuard)
+  @RequireRoles('admin')
+  async createInvite(@Body() body: CreateInviteBody, @Req() request: any, @CurrentUser() user: AuthenticatedUser) {
+    return this.authService.createInvite(
+      {
+        email: String(body.email ?? ''),
+        role: String(body.role ?? ''),
+        expiresAt: String(body.expiresAt ?? ''),
+        fullName: typeof body.fullName === 'string' ? body.fullName : undefined,
+      },
+      user.id,
+      {
+        ipAddress: this.getRequestIp(request),
+        userAgent: this.getHeader(request, 'user-agent'),
+      },
+    );
+  }
+
+  @Post('invites/accept')
+  @HttpCode(200)
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ bucket: 'invite-accept' })
+  async acceptInvite(@Body() body: AcceptInviteBody, @Req() request: any) {
+    return this.authService.acceptInvite(
+      {
+        token: String(body.token ?? ''),
+        password: String(body.password ?? ''),
+        fullName: typeof body.fullName === 'string' ? body.fullName : undefined,
+      },
+      {
+        ipAddress: this.getRequestIp(request),
+        userAgent: this.getHeader(request, 'user-agent'),
+      },
+    );
   }
 
   @Post('logout')
