@@ -590,3 +590,22 @@ Next:
 - Merge task branch into `main` with `--no-ff`.
 - Push `main` and keep `task/TASK-011-password-reset-flow` open/pushed.
 - Run `scripts/openclaw-after-task-check.sh TASK-011`.
+
+## 2026-05-14 19:13 — TASK-012 assignment
+
+Status: assigned
+Owner: backend
+Summary:
+- Ran scripted preflight and received PREFLIGHT_RESULT=PASS.
+- Independently selected TASK-012 from tasks.json: status pending, high priority, dependency TASK-008 done, aligned with PRD users/access requirements, and earliest valid high-priority backend task after completed auth/invite/reset work.
+- Assigned TASK-012 to backend because scope is admin user-management API, RBAC enforcement, login blocking semantics, and AuditLog integration.
+- Created task branch and backend handoff/lock.
+
+Evidence:
+- Branch: task/TASK-012-admin-users-crud
+- Handoff: .openclaw/handoffs/TASK-012-backend.md
+- Lock: .openclaw/locks/TASK-012.lock
+- Preflight: PREFLIGHT_RESULT=PASS
+
+Next:
+- Backend implements TASK-012 on the task branch and reports implementation commits plus exact test results.
