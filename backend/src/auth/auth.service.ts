@@ -5,6 +5,7 @@ import type { AppConfiguration } from '../config/app.config';
 import { hashPassword, verifyPassword } from './password.util';
 import { createSessionToken, hashSessionToken } from './session-token.util';
 import { createInviteToken, hashInviteToken } from './invite-token.util';
+import { createPasswordResetToken, hashPasswordResetToken } from './password-reset-token.util';
 import type { AuthenticatedUser } from './auth.types';
 
 type RequestContext = {
@@ -36,6 +37,11 @@ type AcceptInviteInput = {
   token: string;
   password: string;
   fullName?: string;
+};
+
+type ConfirmPasswordResetInput = {
+  token: string;
+  password: string;
 };
 
 @Injectable()
@@ -363,6 +369,154 @@ export class AuthService {
     };
   }
 
+  async requestPasswordReset(emailInput: string, context: RequestContext) {
+    const email = this.requireEmail(emailInput);
+    const emailNormalized = this.normalizeEmail(email);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + this.appConfig.passwordResetTokenTtlMinutes * 60 * 1000);
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        emailNormalized,
+        deletedAt: null,
+        status: 'active',
+      },
+      select: { id: true, email: true },
+    });
+
+    if (!user) {
+      return {
+        accepted: true,
+        tokenExpiresAt: expiresAt.toISOString(),
+      };
+    }
+
+    const token = createPasswordResetToken();
+    const tokenHash = hashPasswordResetToken(token);
+    const resetToken = await this.prisma.$transaction(async (tx) => {
+      const createdToken = await tx.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash,
+          expiresAt,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: user.id,
+          action: 'password_reset.requested',
+          entityType: 'PasswordResetToken',
+          entityId: createdToken.id,
+          afterData: {
+            userId: user.id,
+            expiresAt: expiresAt.toISOString(),
+          },
+          metadata: {
+            emailNormalized,
+          },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+
+      return createdToken;
+    });
+
+    return {
+      accepted: true,
+      tokenExpiresAt: resetToken.expiresAt.toISOString(),
+      ...(this.appConfig.nodeEnv === 'production' ? {} : { token }),
+    };
+  }
+
+  async confirmPasswordReset(input: ConfirmPasswordResetInput, context: RequestContext) {
+    const token = this.requirePasswordResetToken(input.token);
+    const password = this.requirePassword(input.password);
+    const tokenHash = hashPasswordResetToken(token);
+    const now = new Date();
+
+    const resetToken = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+    if (!resetToken) {
+      throw new BadRequestException('Password reset token is invalid');
+    }
+    if (resetToken.usedAt) {
+      throw new ConflictException('Password reset token has already been used');
+    }
+    if (resetToken.expiresAt <= now) {
+      throw new BadRequestException('Password reset token has expired');
+    }
+    if (resetToken.user.deletedAt || resetToken.user.status !== 'active') {
+      throw new BadRequestException('Password reset token is invalid');
+    }
+
+    const passwordData = hashPassword(password);
+
+    await this.prisma.$transaction(async (tx) => {
+      const useTokenResult = await tx.passwordResetToken.updateMany({
+        where: {
+          id: resetToken.id,
+          usedAt: null,
+        },
+        data: { usedAt: now },
+      });
+      if (useTokenResult.count !== 1) {
+        throw new ConflictException('Password reset token has already been used');
+      }
+
+      await tx.userCredential.update({
+        where: { userId: resetToken.userId },
+        data: {
+          ...passwordData,
+          passwordChangedAt: now,
+          mustChangePassword: false,
+          failedLoginCount: 0,
+          lastFailedLoginAt: null,
+          lockedUntil: null,
+        },
+      });
+
+      await tx.userSession.updateMany({
+        where: {
+          userId: resetToken.userId,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: now,
+          revokedReason: 'password_reset',
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: resetToken.userId,
+          action: 'password_reset.completed',
+          entityType: 'PasswordResetToken',
+          entityId: resetToken.id,
+          afterData: {
+            userId: resetToken.userId,
+            usedAt: now.toISOString(),
+            sessionsRevoked: true,
+          },
+          metadata: {
+            emailNormalized: resetToken.user.emailNormalized,
+          },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+    });
+
+    return {
+      reset: true,
+      passwordChangedAt: now.toISOString(),
+      sessionsRevoked: true,
+    };
+  }
+
   async canAccessStore(userId: string, role: string, storeId: string): Promise<boolean> {
     if (role === 'admin') {
       return true;
@@ -475,6 +629,15 @@ export class AuthService {
     const normalizedToken = typeof token === 'string' ? token.trim() : '';
     if (!normalizedToken) {
       throw new BadRequestException('Invitation token is required');
+    }
+
+    return normalizedToken;
+  }
+
+  private requirePasswordResetToken(token: string): string {
+    const normalizedToken = typeof token === 'string' ? token.trim() : '';
+    if (!normalizedToken) {
+      throw new BadRequestException('Password reset token is required');
     }
 
     return normalizedToken;

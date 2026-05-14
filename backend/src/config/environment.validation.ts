@@ -15,6 +15,7 @@ export interface EnvironmentVariables {
   AUTH_ACTION_RATE_LIMIT_MAX: number;
   AUTH_FAILED_LOGIN_MAX_ATTEMPTS: number;
   AUTH_FAILED_LOGIN_LOCK_MINUTES: number;
+  PASSWORD_RESET_TOKEN_TTL_MINUTES: number;
 }
 
 const allowedNodeEnvironments: NodeEnvironment[] = ['development', 'test', 'production'];
@@ -81,6 +82,7 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
   const authActionRateLimitMax = optionalPositiveInteger(config, 'AUTH_ACTION_RATE_LIMIT_MAX', 10, errors);
   const authFailedLoginMaxAttempts = optionalPositiveInteger(config, 'AUTH_FAILED_LOGIN_MAX_ATTEMPTS', 5, errors);
   const authFailedLoginLockMinutes = optionalPositiveInteger(config, 'AUTH_FAILED_LOGIN_LOCK_MINUTES', 15, errors);
+  const passwordResetTokenTtlMinutes = optionalPositiveInteger(config, 'PASSWORD_RESET_TOKEN_TTL_MINUTES', 60, errors);
 
   if (nodeEnv && !allowedNodeEnvironments.includes(nodeEnv)) {
     errors.push(`NODE_ENV must be one of: ${allowedNodeEnvironments.join(', ')}`);
@@ -127,5 +129,6 @@ export function validateEnvironment(config: Record<string, unknown>): Environmen
     AUTH_ACTION_RATE_LIMIT_MAX: authActionRateLimitMax,
     AUTH_FAILED_LOGIN_MAX_ATTEMPTS: authFailedLoginMaxAttempts,
     AUTH_FAILED_LOGIN_LOCK_MINUTES: authFailedLoginLockMinutes,
+    PASSWORD_RESET_TOKEN_TTL_MINUTES: passwordResetTokenTtlMinutes,
   };
 }
