@@ -1168,3 +1168,31 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-035`.
+
+## 2026-05-15 10:50 — TASK-037 — Scale API security
+
+Status: done
+Owner: backend
+Summary:
+- Added reusable Scale API security foundation for deviceCode + plain apiToken authentication.
+- Backend verifies submitted tokens only against ScaleDevice.apiTokenHash.
+- Invalid tokens return authorization failure; inactive/blocked devices are denied.
+- Added rate limiting for Scale API endpoints.
+- Auth failures are logged to ScaleSyncLog without storing or returning plain tokens or apiTokenHash.
+- Added minimal Scale API auth-check/check-update security endpoints without implementing TASK-038 package delivery or TASK-039 ACK behavior.
+- Marked TASK-037 status as done after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: 542aabe TASK-037 secure scale API auth.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validation: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Focused backend check reported PASS for valid auth, invalid token 401 path, inactive/blocked 403 denial, rate limiting and secret redaction.
+- Manager scope/code inspection passed.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-037` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-037`.
