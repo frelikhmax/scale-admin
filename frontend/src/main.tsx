@@ -24,6 +24,14 @@ import {
   type PublishCatalogResponse,
 } from './features/publishing/publishingApi';
 import {
+  useCreateScaleDeviceMutation,
+  useListScaleDevicesQuery,
+  useRegenerateScaleDeviceTokenMutation,
+  useUpdateScaleDeviceStatusMutation,
+  type ScaleDevice,
+  type ScaleDeviceStatus,
+} from './features/scales/scalesApi';
+import {
   useCreateStoreMutation,
   useGetStoreQuery,
   useListStoresQuery,
@@ -311,12 +319,220 @@ function StoreDetails({ user, storeId, onNavigate }: { user: AuthUser; storeId: 
             <div><dt>Created</dt><dd>{new Date(store.createdAt).toLocaleString()}</dd></div>
             <div><dt>Updated</dt><dd>{new Date(store.updatedAt).toLocaleString()}</dd></div>
           </dl>
+          <ScaleDevicesTab storeId={store.id} userRole={user.role} />
           <PricesTab storeId={store.id} />
           <PublishingTab storeId={store.id} />
         </>
       )}
     </section>
   );
+}
+
+function ScaleDevicesTab({ storeId, userRole }: { storeId: string; userRole: AuthUser['role'] }) {
+  const isAdmin = userRole === 'admin';
+  const { data, error, isLoading, isFetching, refetch } = useListScaleDevicesQuery(storeId);
+  const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
+  const [createDevice, { isLoading: creating }] = useCreateScaleDeviceMutation();
+  const [updateStatus, { isLoading: updatingStatus }] = useUpdateScaleDeviceStatusMutation();
+  const [regenerateToken, { isLoading: regenerating }] = useRegenerateScaleDeviceTokenMutation();
+  const [deviceCode, setDeviceCode] = useState('');
+  const [name, setName] = useState('');
+  const [model, setModel] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [issuedToken, setIssuedToken] = useState<{ deviceId: string; deviceCode: string; apiToken: string; action: 'created' | 'regenerated' } | null>(null);
+  const devices = data?.devices ?? [];
+  const errorMessage = error && 'message' in error ? error.message : null;
+
+  async function getCsrfOrThrow() {
+    const csrfData = csrf ?? (await refetchCsrf()).data;
+    if (!csrfData) {
+      throw new Error('Не удалось подготовить защищённую форму. Повторите попытку.');
+    }
+    return csrfData;
+  }
+
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+    setActionError(null);
+    setIssuedToken(null);
+
+    const trimmedCode = deviceCode.trim();
+    const trimmedName = name.trim();
+    const trimmedModel = model.trim();
+    if (!trimmedCode || !trimmedName) {
+      setFormError('Device code and name are required.');
+      return;
+    }
+
+    try {
+      const csrfData = await getCsrfOrThrow();
+      const response = await createDevice({
+        storeId,
+        deviceCode: trimmedCode,
+        name: trimmedName,
+        model: trimmedModel || undefined,
+        status: 'active',
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setIssuedToken({
+        deviceId: response.device.id,
+        deviceCode: response.device.deviceCode,
+        apiToken: response.apiToken,
+        action: 'created',
+      });
+      setDeviceCode('');
+      setName('');
+      setModel('');
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : 'Scale device could not be registered.';
+      setFormError(message);
+    }
+  }
+
+  async function handleBlock(device: ScaleDevice) {
+    setActionError(null);
+    setIssuedToken(null);
+
+    try {
+      const csrfData = await getCsrfOrThrow();
+      await updateStatus({
+        deviceId: device.id,
+        status: 'blocked',
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : 'Scale device could not be blocked.';
+      setActionError(message);
+    }
+  }
+
+  async function handleRegenerate(device: ScaleDevice) {
+    setActionError(null);
+    setIssuedToken(null);
+
+    try {
+      const csrfData = await getCsrfOrThrow();
+      const response = await regenerateToken({
+        deviceId: device.id,
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setIssuedToken({
+        deviceId: response.device.id,
+        deviceCode: response.device.deviceCode,
+        apiToken: response.apiToken,
+        action: 'regenerated',
+      });
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : 'Scale device token could not be regenerated.';
+      setActionError(message);
+    }
+  }
+
+  return (
+    <section className="scale-devices-tab" aria-labelledby="scale-devices-title">
+      <div className="panel-heading scale-devices-heading">
+        <div>
+          <p className="eyebrow">Scale Devices</p>
+          <h3 id="scale-devices-title">Store scale devices</h3>
+          <p className="muted">{isAdmin ? 'Register devices, block access and rotate API tokens.' : 'Current scale device status for this store.'}</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? 'Refreshing...' : 'Refresh devices'}
+        </button>
+      </div>
+
+      {isAdmin && (
+        <form className="scale-device-form" onSubmit={handleCreate}>
+          <label>
+            Device code
+            <input value={deviceCode} onChange={(event) => setDeviceCode(event.target.value)} placeholder="SCALE-001" />
+          </label>
+          <label>
+            Name
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Front counter scale" />
+          </label>
+          <label>
+            Model
+            <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Optional model" />
+          </label>
+          <button type="submit" disabled={creating}>{creating ? 'Registering...' : 'Register device'}</button>
+        </form>
+      )}
+
+      {formError && <div className="form-error" role="alert">{formError}</div>}
+      {actionError && <div className="form-error" role="alert">{actionError}</div>}
+      {issuedToken && (
+        <div className="token-notice" role="status">
+          <strong>API token {issuedToken.action === 'created' ? 'created' : 'regenerated'} for {issuedToken.deviceCode}.</strong>
+          <span>Copy it now. This plain token is shown only once and is not stored in the UI.</span>
+          <code>{issuedToken.apiToken}</code>
+          <button className="secondary-button" type="button" onClick={() => setIssuedToken(null)}>Hide token</button>
+        </div>
+      )}
+
+      {isLoading && <div className="status status-loading">Loading scale devices...</div>}
+      {errorMessage && <div className="form-error" role="alert">{errorMessage}</div>}
+      {!isLoading && !errorMessage && devices.length === 0 && <div className="empty-state">No scale devices registered for this store.</div>}
+      {devices.length > 0 && (
+        <div className="scale-device-table-wrap">
+          <table className="scale-device-table">
+            <thead>
+              <tr>
+                <th>Device code</th>
+                {isAdmin && <th>Name</th>}
+                {isAdmin && <th>Model</th>}
+                <th>Status</th>
+                {isAdmin && <th>Last seen</th>}
+                {isAdmin && <th>Last sync</th>}
+                {isAdmin && <th>Catalog version</th>}
+                {isAdmin && <th>Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {devices.map((device) => (
+                <tr key={device.id}>
+                  <td><code>{device.deviceCode}</code>{!isAdmin && <span className="operator-device-name">{device.name}</span>}</td>
+                  {isAdmin && <td>{device.name}</td>}
+                  {isAdmin && <td>{device.model ?? '—'}</td>}
+                  <td><ScaleDeviceStatusBadge status={device.status} /></td>
+                  {isAdmin && <td>{formatDateTime(device.lastSeenAt)}</td>}
+                  {isAdmin && <td>{formatDateTime(device.lastSyncAt)}</td>}
+                  {isAdmin && <td><code>{device.currentCatalogVersionId ?? '—'}</code></td>}
+                  {isAdmin && (
+                    <td>
+                      <div className="table-actions">
+                        <button className="secondary-button" type="button" onClick={() => handleBlock(device)} disabled={updatingStatus || device.status === 'blocked'}>
+                          {device.status === 'blocked' ? 'Blocked' : 'Block'}
+                        </button>
+                        <button className="secondary-button" type="button" onClick={() => handleRegenerate(device)} disabled={regenerating}>
+                          Regenerate token
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ScaleDeviceStatusBadge({ status }: { status: ScaleDeviceStatus }) {
+  return <span className={`badge badge-${status}`}>{status}</span>;
 }
 
 function formatDateTime(value: string | null | undefined) {

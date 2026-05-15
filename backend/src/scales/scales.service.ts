@@ -60,6 +60,18 @@ export class ScalesService {
     private readonly auditLogs: AuditLogService,
   ) {}
 
+  async listStoreDevices(storeId: string) {
+    const store = await this.findStoreById(storeId);
+    const devices = await this.prisma.scaleDevice.findMany({
+      where: { storeId: store.id },
+      orderBy: [{ status: 'asc' }, { deviceCode: 'asc' }],
+    });
+
+    return {
+      devices: devices.map((device) => this.toDeviceResponse(device)),
+    };
+  }
+
   async registerDevice(storeId: string, input: CreateScaleDeviceInput, actorUserId: string, context: RequestContext) {
     const store = await this.findStoreById(storeId);
     const deviceCode = this.requireDeviceCode(input.deviceCode);
