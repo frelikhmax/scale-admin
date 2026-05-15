@@ -1,4 +1,4 @@
-import { type FormEvent, StrictMode, useMemo, useState } from 'react';
+import { type FormEvent, StrictMode, useEffect, useMemo, useState } from 'react';
 import { Provider } from 'react-redux';
 import { createRoot } from 'react-dom/client';
 import { store } from './app/store';
@@ -32,6 +32,17 @@ import {
   type StoreFormValues,
   type StoreStatus,
 } from './features/stores/storesApi';
+import {
+  useBlockUserMutation,
+  useChangeUserRoleMutation,
+  useCreateInviteMutation,
+  useGrantStoreAccessMutation,
+  useListUserStoreAccessesQuery,
+  useListUsersQuery,
+  useRevokeStoreAccessMutation,
+  useUnblockUserMutation,
+  type ManagedUser,
+} from './features/users/usersApi';
 import './styles.css';
 
 type DashboardView =
@@ -39,7 +50,8 @@ type DashboardView =
   | { name: 'stores' }
   | { name: 'store-details'; storeId: string }
   | { name: 'store-create' }
-  | { name: 'store-edit'; storeId: string };
+  | { name: 'store-edit'; storeId: string }
+  | { name: 'users-access' };
 
 function HealthStatus() {
   const { data: health, error, isLoading, isFetching, refetch } = useGetHealthQuery();
@@ -184,9 +196,18 @@ function Navigation({ user, activeView, onNavigate }: { user: AuthUser; activeVi
         Stores
       </button>
       {user.role === 'admin' ? (
-        <button className="nav-button" type="button" onClick={() => onNavigate({ name: 'store-create' })}>
-          Create store
-        </button>
+        <>
+          <button className="nav-button" type="button" onClick={() => onNavigate({ name: 'store-create' })}>
+            Create store
+          </button>
+          <button
+            className={activeView.name === 'users-access' ? 'nav-button nav-button-active' : 'nav-button'}
+            type="button"
+            onClick={() => onNavigate({ name: 'users-access' })}
+          >
+            Users & Access
+          </button>
+        </>
       ) : (
         <span className="nav-note">Operator navigation: assigned stores only</span>
       )}
@@ -774,7 +795,280 @@ function StoreEditRoute({ storeId, onNavigate }: { storeId: string; onNavigate: 
   );
 }
 
+function AccessDeniedPanel() {
+  return (
+    <section className="panel" aria-labelledby="access-denied-title">
+      <p className="eyebrow">Access denied</p>
+      <h2 id="access-denied-title">Users & Access is admin-only</h2>
+      <p className="muted">Operators cannot open user management controls. Ask an admin if your account needs additional store access.</p>
+    </section>
+  );
+}
+
+function getDefaultInviteExpiry() {
+  const date = new Date();
+  date.setDate(date.getDate() + 7);
+  return date.toISOString().slice(0, 16);
+}
+
+function UsersAccessPage({ currentUser }: { currentUser: AuthUser }) {
+  const [includeDeleted, setIncludeDeleted] = useState(false);
+  const { data, error, isLoading, isFetching, refetch } = useListUsersQuery({ includeDeleted });
+  const users = data?.users ?? [];
+  const errorMessage = error && 'message' in error ? error.message : null;
+
+  return (
+    <section className="panel" aria-labelledby="users-access-title">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">Users & Access</p>
+          <h2 id="users-access-title">Invites, roles and operator stores</h2>
+          <p className="muted">Create admin/operator invites, change roles, block users and manage operator store assignments.</p>
+        </div>
+        <div className="action-row">
+          <label className="compact-checkbox">
+            <input type="checkbox" checked={includeDeleted} onChange={(event) => setIncludeDeleted(event.target.checked)} />
+            Include deleted
+          </label>
+          <button className="secondary-button" type="button" onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? 'Refreshing...' : 'Refresh users'}
+          </button>
+        </div>
+      </div>
+
+      <InviteForm />
+
+      {isLoading && <div className="status status-loading">Loading users...</div>}
+      {errorMessage && <div className="form-error" role="alert">{errorMessage}</div>}
+      {!isLoading && !errorMessage && users.length === 0 && <div className="empty-state">No users found.</div>}
+      {users.length > 0 && (
+        <div className="users-list">
+          {users.map((managedUser) => (
+            <UserAccessCard key={managedUser.id} user={managedUser} currentUser={currentUser} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function InviteForm() {
+  const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [role, setRole] = useState<AuthUser['role']>('operator');
+  const [expiresAt, setExpiresAt] = useState(getDefaultInviteExpiry());
+  const [formError, setFormError] = useState<string | null>(null);
+  const [createdInvite, setCreatedInvite] = useState<{ email: string; token: string; expiresAt: string } | null>(null);
+  const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
+  const [createInvite, { isLoading }] = useCreateInviteMutation();
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+    setCreatedInvite(null);
+
+    if (!email.trim()) {
+      setFormError('Email is required.');
+      return;
+    }
+
+    const csrfData = csrf ?? (await refetchCsrf()).data;
+    if (!csrfData) {
+      setFormError('Не удалось подготовить защищённую форму. Повторите попытку.');
+      return;
+    }
+
+    try {
+      const response = await createInvite({
+        email: email.trim(),
+        fullName: fullName.trim() || undefined,
+        role,
+        expiresAt: new Date(expiresAt).toISOString(),
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setCreatedInvite({ email: response.invite.email, token: response.token, expiresAt: response.invite.expiresAt });
+      setEmail('');
+      setFullName('');
+      setRole('operator');
+      setExpiresAt(getDefaultInviteExpiry());
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Invite could not be created.';
+      setFormError(message);
+    }
+  }
+
+  return (
+    <form className="invite-form" onSubmit={handleSubmit}>
+      <div>
+        <p className="eyebrow">Create invite</p>
+        <p className="muted">Send this one-time token to the invited user through a secure channel.</p>
+      </div>
+      <div className="invite-grid">
+        <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="operator@example.com" /></label>
+        <label>Full name<input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Optional" /></label>
+        <label>Role<select value={role} onChange={(event) => setRole(event.target.value as AuthUser['role'])}><option value="operator">operator</option><option value="admin">admin</option></select></label>
+        <label>Expires at<input type="datetime-local" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} /></label>
+      </div>
+      {formError && <div className="form-error" role="alert">{formError}</div>}
+      {createdInvite && (
+        <div className="status status-ok" role="status">
+          Invite for <strong>{createdInvite.email}</strong> expires {formatDateTime(createdInvite.expiresAt)}.<br />
+          Token: <code>{createdInvite.token}</code>
+        </div>
+      )}
+      <button type="submit" disabled={isLoading}>{isLoading ? 'Creating invite...' : 'Create invite'}</button>
+    </form>
+  );
+}
+
+function UserAccessCard({ user, currentUser }: { user: ManagedUser; currentUser: AuthUser }) {
+  const [rowError, setRowError] = useState<string | null>(null);
+  const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
+  const [changeRole, { isLoading: changingRole }] = useChangeUserRoleMutation();
+  const [blockUser, { isLoading: blocking }] = useBlockUserMutation();
+  const [unblockUser, { isLoading: unblocking }] = useUnblockUserMutation();
+  const isDeleted = Boolean(user.deletedAt);
+  const isSelf = currentUser.id === user.id;
+  const statusClass = user.status === 'blocked' ? 'badge-blocked' : user.status === 'active' ? 'badge-active' : 'badge-inactive';
+
+  async function getCsrfOrThrow() {
+    const csrfData = csrf ?? (await refetchCsrf()).data;
+    if (!csrfData) throw new Error('Не удалось подготовить защищённую форму. Повторите попытку.');
+    return csrfData;
+  }
+
+  async function runAction(action: (csrfData: { csrfToken: string; headerName: string }) => Promise<unknown>) {
+    setRowError(null);
+    try {
+      await action(await getCsrfOrThrow());
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : 'User update failed.';
+      setRowError(message);
+    }
+  }
+
+  return (
+    <article className="user-card">
+      <div className="user-card-main">
+        <div>
+          <p className="store-code">{user.email}</p>
+          <h3>{user.fullName || 'Unnamed user'}</h3>
+          <p className="muted">Created {formatDateTime(user.createdAt)} · Last login {formatDateTime(user.lastLoginAt)}</p>
+        </div>
+        <div className="store-actions">
+          <span className={`badge ${statusClass}`}>{isDeleted ? 'deleted' : user.status}</span>
+          <label className="role-control">
+            Role
+            <select
+              value={user.role}
+              disabled={isDeleted || changingRole}
+              onChange={(event) => runAction((csrfData) => changeRole({ userId: user.id, role: event.target.value as AuthUser['role'], csrfToken: csrfData.csrfToken, csrfHeaderName: csrfData.headerName }).unwrap())}
+            >
+              <option value="operator">operator</option>
+              <option value="admin">admin</option>
+            </select>
+          </label>
+          {user.status === 'blocked' ? (
+            <button className="secondary-button" type="button" disabled={isDeleted || unblocking} onClick={() => runAction((csrfData) => unblockUser({ userId: user.id, csrfToken: csrfData.csrfToken, csrfHeaderName: csrfData.headerName }).unwrap())}>
+              {unblocking ? 'Unblocking...' : 'Unblock'}
+            </button>
+          ) : (
+            <button className="secondary-button" type="button" disabled={isDeleted || blocking || isSelf} onClick={() => runAction((csrfData) => blockUser({ userId: user.id, csrfToken: csrfData.csrfToken, csrfHeaderName: csrfData.headerName }).unwrap())}>
+              {blocking ? 'Blocking...' : 'Block'}
+            </button>
+          )}
+        </div>
+      </div>
+      {rowError && <div className="inline-error" role="alert">{rowError}</div>}
+      {user.role === 'operator' && !isDeleted && <OperatorStoreAccess userId={user.id} />}
+    </article>
+  );
+}
+
+function OperatorStoreAccess({ userId }: { userId: string }) {
+  const [storeId, setStoreId] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
+  const { data: accessData, error: accessError, isLoading: accessLoading } = useListUserStoreAccessesQuery(userId);
+  const { data: storesData } = useListStoresQuery();
+  const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
+  const [grantStoreAccess, { isLoading: granting }] = useGrantStoreAccessMutation();
+  const [revokeStoreAccess, { isLoading: revoking }] = useRevokeStoreAccessMutation();
+  const activeAccesses = (accessData?.storeAccesses ?? []).filter((access) => !access.revokedAt);
+  const activeStoreIds = new Set(activeAccesses.map((access) => access.storeId));
+  const availableStores = (storesData?.stores ?? []).filter((store) => store.status !== 'archived' && !activeStoreIds.has(store.id));
+  const accessErrorMessage = accessError && 'message' in accessError ? accessError.message : null;
+
+  async function getCsrfOrThrow() {
+    const csrfData = csrf ?? (await refetchCsrf()).data;
+    if (!csrfData) throw new Error('Не удалось подготовить защищённую форму. Повторите попытку.');
+    return csrfData;
+  }
+
+  async function handleGrant() {
+    setActionError(null);
+    if (!storeId) {
+      setActionError('Choose a store to assign.');
+      return;
+    }
+    try {
+      const csrfData = await getCsrfOrThrow();
+      await grantStoreAccess({ userId, storeId, csrfToken: csrfData.csrfToken, csrfHeaderName: csrfData.headerName }).unwrap();
+      setStoreId('');
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Store access could not be assigned.';
+      setActionError(message);
+    }
+  }
+
+  async function handleRevoke(revokeStoreId: string) {
+    setActionError(null);
+    try {
+      const csrfData = await getCsrfOrThrow();
+      await revokeStoreAccess({ userId, storeId: revokeStoreId, csrfToken: csrfData.csrfToken, csrfHeaderName: csrfData.headerName }).unwrap();
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Store access could not be revoked.';
+      setActionError(message);
+    }
+  }
+
+  return (
+    <div className="store-access-box">
+      <div className="store-access-header">
+        <h4>Operator store access</h4>
+        <div className="access-grant-row">
+          <select value={storeId} onChange={(event) => setStoreId(event.target.value)} aria-label="Store to assign">
+            <option value="">Choose store</option>
+            {availableStores.map((store) => <option key={store.id} value={store.id}>{store.code} · {store.name}</option>)}
+          </select>
+          <button type="button" disabled={granting || !storeId} onClick={handleGrant}>{granting ? 'Assigning...' : 'Assign store'}</button>
+        </div>
+      </div>
+      {accessLoading && <div className="status status-loading">Loading store access...</div>}
+      {accessErrorMessage && <div className="form-error" role="alert">{accessErrorMessage}</div>}
+      {actionError && <div className="inline-error" role="alert">{actionError}</div>}
+      {!accessLoading && activeAccesses.length === 0 && <div className="empty-state">No active stores assigned.</div>}
+      {activeAccesses.length > 0 && (
+        <div className="access-list">
+          {activeAccesses.map((access) => (
+            <div className="access-item" key={access.id}>
+              <span><strong>{access.store.code}</strong> · {access.store.name}</span>
+              <button className="secondary-button" type="button" disabled={revoking} onClick={() => handleRevoke(access.storeId)}>
+                {revoking ? 'Revoking...' : 'Revoke'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DashboardContent({ user, view, onNavigate }: { user: AuthUser; view: DashboardView; onNavigate: (view: DashboardView) => void }) {
+  if (view.name === 'users-access') {
+    return user.role === 'admin' ? <UsersAccessPage currentUser={user} /> : <AccessDeniedPanel />;
+  }
+
   if (view.name === 'stores') {
     return <StoresList user={user} onNavigate={onNavigate} />;
   }
@@ -794,10 +1088,35 @@ function DashboardContent({ user, view, onNavigate }: { user: AuthUser; view: Da
   return <HealthStatus />;
 }
 
+function viewFromHash(): DashboardView {
+  return window.location.hash === '#users-access' ? { name: 'users-access' } : { name: 'overview' };
+}
+
+function hashFromView(view: DashboardView) {
+  return view.name === 'users-access' ? '#users-access' : '';
+}
+
 function Dashboard({ user }: { user: AuthUser }) {
-  const [view, setView] = useState<DashboardView>({ name: 'overview' });
+  const [view, setView] = useState<DashboardView>(viewFromHash);
   const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
   const [logout, { isLoading: logoutLoading, error: logoutError }] = useLogoutMutation();
+
+  useEffect(() => {
+    function handleHashChange() {
+      setView(viewFromHash());
+    }
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  function handleNavigate(nextView: DashboardView) {
+    const hash = hashFromView(nextView);
+    if (window.location.hash !== hash) {
+      window.location.hash = hash;
+    }
+    setView(nextView);
+  }
 
   async function handleLogout() {
     const csrfData = csrf ?? (await refetchCsrf()).data;
@@ -826,9 +1145,9 @@ function Dashboard({ user }: { user: AuthUser }) {
         </button>
       </section>
 
-      <Navigation user={user} activeView={view} onNavigate={setView} />
+      <Navigation user={user} activeView={view} onNavigate={handleNavigate} />
       {logoutErrorMessage && <div className="form-error" role="alert">{logoutErrorMessage}</div>}
-      <DashboardContent user={user} view={view} onNavigate={setView} />
+      <DashboardContent user={user} view={view} onNavigate={handleNavigate} />
     </main>
   );
 }
