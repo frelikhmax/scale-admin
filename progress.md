@@ -1247,3 +1247,29 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run scripts/openclaw-after-task-check.sh TASK-039.
+
+## 2026-05-15T11:49:46+02:00 — TASK-036 — Versions / Publishing tab
+
+Status: done
+Owner: frontend
+Summary:
+- Added Store Details Versions / Publishing UI for validation, blocking errors, warnings, publishing and version history.
+- Added CSRF-protected RTK Query publish/validation actions and a guarded backend read endpoint for catalog version history.
+- Publish stays disabled until validation reports no blocking errors.
+- Successful publish displays the new version/date; history shows versionNumber, publishedAt, publishedBy and checksum.
+- Marked TASK-036 status as done after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: 24d6db5 TASK-036 add versions publishing UI.
+- Frontend build: npm --prefix frontend run build passed.
+- Frontend typecheck: cd frontend && npm exec tsc -- -b passed.
+- Backend build: cd backend && npm run build passed.
+- Prisma validation: cd backend && npx prisma validate --schema prisma/schema.prisma passed.
+- Docker verification: scripts/openclaw-docker-verify.sh TASK-036 returned DOCKER_VERIFY_RESULT=PASS.
+
+Notes:
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime .openclaw/locks/, .openclaw/handoffs/, and .openclaw/runtime-audit/ artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run scripts/openclaw-after-task-check.sh TASK-036.
