@@ -1033,3 +1033,30 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main` and the task branch, then run `scripts/openclaw-after-task-check.sh TASK-028`.
+
+## 2026-05-15 09:17 — TASK-029 — File image upload API
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented authenticated `POST /api/files/images` multipart upload for image field `file`.
+- Added server-side validation for jpg/jpeg, png and webp uploads, including 2 MB size limit, extension allow-list and magic-byte type detection.
+- Files are saved under local uploads with UUID-generated filenames, not user-provided filenames.
+- Upload responses return FileAsset metadata including `publicUrl`; `/uploads/*` is served statically.
+- FileAsset persistence and AuditLog entry `file.uploaded` were added for successful uploads.
+- Manager fixed startup wiring by importing `AuthModule` into `FilesModule`, then verified backend build and Docker gate.
+- Marked TASK-029 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit: `9af99a6 TASK-029 implement file image upload`.
+- Changed implementation files: `.gitignore`, `backend/src/files/files.controller.ts`, `backend/src/files/files.module.ts`, `backend/src/files/files.service.ts`, `backend/src/main.ts`.
+- Backend build: `cd backend && npm run build` passed.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-029` returned `DOCKER_VERIFY_RESULT=PASS` after fixing module auth wiring.
+- Acceptance/source checks confirmed authenticated controller guard, allowed extension checks, magic-byte validation, UUID stored filenames, publicUrl response, FileAsset create and AuditLog create.
+
+Notes:
+- No delete endpoint was added; physical deletion of files used by published versions is not performed in this task scope.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+
+Next:
+- Merge task branch to `main`, push `main` and the task branch, then run `scripts/openclaw-after-task-check.sh TASK-029`.
