@@ -12,6 +12,14 @@ export type ScaleDevice = {
   lastSeenAt: string | null;
   lastSyncAt: string | null;
   currentCatalogVersionId: string | null;
+  lastSyncStatus: 'no_update' | 'update_available' | 'package_delivered' | 'ack_received' | 'auth_failed' | 'error' | null;
+  lastSyncError: {
+    status: 'auth_failed' | 'error';
+    message: string | null;
+    requestedVersionId: string | null;
+    deliveredVersionId: string | null;
+    createdAt: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
 };

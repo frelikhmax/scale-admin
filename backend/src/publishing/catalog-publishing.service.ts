@@ -24,6 +24,23 @@ export class CatalogPublishingService {
 
   async listCatalogVersions(storeId: string) {
     const normalizedStoreId = this.normalizeRequiredId(storeId);
+    const currentCatalog = await this.prisma.storeCatalog.findFirst({
+      where: { storeId: normalizedStoreId, status: 'active' },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        currentVersion: {
+          select: {
+            id: true,
+            versionNumber: true,
+            status: true,
+            publishedAt: true,
+            publishedByUserId: true,
+            packageChecksum: true,
+            publishedBy: { select: { fullName: true, email: true } },
+          },
+        },
+      },
+    });
     const versions = await this.prisma.catalogVersion.findMany({
       where: { storeId: normalizedStoreId },
       select: {
@@ -38,7 +55,21 @@ export class CatalogPublishingService {
       orderBy: [{ versionNumber: 'desc' }, { createdAt: 'desc' }],
     });
 
+    const currentVersion = currentCatalog?.currentVersion ?? null;
+
     return {
+      currentVersion: currentVersion
+        ? {
+            id: currentVersion.id,
+            versionNumber: currentVersion.versionNumber,
+            status: currentVersion.status,
+            publishedAt: currentVersion.publishedAt,
+            publishedBy: currentVersion.publishedBy?.fullName || currentVersion.publishedBy?.email || null,
+            publishedByUserId: currentVersion.publishedByUserId,
+            checksum: currentVersion.packageChecksum,
+            packageChecksum: currentVersion.packageChecksum,
+          }
+        : null,
       versions: versions.map((version) => ({
         id: version.id,
         versionNumber: version.versionNumber,

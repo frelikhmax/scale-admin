@@ -51,6 +51,13 @@ type ScaleDeviceRecord = {
   currentCatalogVersionId: string | null;
   createdAt: Date;
   updatedAt: Date;
+  syncLogs?: Array<{
+    status: ScaleSyncStatus;
+    errorMessage: string | null;
+    requestedVersionId: string | null;
+    deliveredVersionId: string | null;
+    createdAt: Date;
+  }>;
 };
 
 @Injectable()
@@ -64,6 +71,19 @@ export class ScalesService {
     const store = await this.findStoreById(storeId);
     const devices = await this.prisma.scaleDevice.findMany({
       where: { storeId: store.id },
+      include: {
+        syncLogs: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            status: true,
+            errorMessage: true,
+            requestedVersionId: true,
+            deliveredVersionId: true,
+            createdAt: true,
+          },
+        },
+      },
       orderBy: [{ status: 'asc' }, { deviceCode: 'asc' }],
     });
 
@@ -529,6 +549,9 @@ export class ScalesService {
   }
 
   private toDeviceResponse(device: ScaleDeviceRecord) {
+    const latestSyncLog = device.syncLogs?.[0] ?? null;
+    const hasSyncError = latestSyncLog?.status === 'error' || latestSyncLog?.status === 'auth_failed';
+
     return {
       id: device.id,
       storeId: device.storeId,
@@ -539,6 +562,16 @@ export class ScalesService {
       lastSeenAt: device.lastSeenAt?.toISOString() ?? null,
       lastSyncAt: device.lastSyncAt?.toISOString() ?? null,
       currentCatalogVersionId: device.currentCatalogVersionId,
+      lastSyncStatus: latestSyncLog?.status ?? null,
+      lastSyncError: hasSyncError
+        ? {
+            status: latestSyncLog.status,
+            message: latestSyncLog.errorMessage,
+            requestedVersionId: latestSyncLog.requestedVersionId,
+            deliveredVersionId: latestSyncLog.deliveredVersionId,
+            createdAt: latestSyncLog.createdAt.toISOString(),
+          }
+        : null,
       createdAt: device.createdAt.toISOString(),
       updatedAt: device.updatedAt.toISOString(),
     };

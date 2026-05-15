@@ -67,7 +67,7 @@ type PublishingWriteRequest = {
 
 export const publishingApi = backendApi.injectEndpoints({
   endpoints: (builder) => ({
-    getCatalogVersions: builder.query<{ versions: CatalogVersionHistoryItem[] }, string>({
+    getCatalogVersions: builder.query<{ currentVersion: CatalogVersionHistoryItem | null; versions: CatalogVersionHistoryItem[] }, string>({
       query: (storeId) => `/stores/${storeId}/publishing/catalog-versions`,
       providesTags: (_result, _error, storeId) => [{ type: 'Publishing', id: storeId }],
     }),

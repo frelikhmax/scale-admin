@@ -867,3 +867,64 @@ select:focus {
   color: #6b778d;
   font-size: 0.9rem;
 }
+
+.publication-status-card {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid #b7c7f0;
+  border-radius: 16px;
+  color: #24408f;
+  background: #f3f6ff;
+}
+
+.publication-status-card span {
+  overflow-wrap: anywhere;
+}
+
+.publication-status-card small,
+.sync-status small,
+.sync-note {
+  color: #6b778d;
+}
+
+.scale-device-outdated td {
+  background: #fff9e8;
+}
+
+.sync-note {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.sync-status {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.sync-status-error small {
+  color: #9d1c28;
+}
+
+.badge-sync-error,
+.badge-sync-auth_failed {
+  color: #9d1c28;
+  background: #ffe1e5;
+}
+
+.badge-sync-ack_received,
+.badge-sync-no_update {
+  color: #0d6832;
+  background: #ddf6e5;
+}
+
+.badge-sync-package_delivered,
+.badge-sync-update_available,
+.badge-sync-unknown {
+  color: #78520d;
+  background: #fff0c2;
+}
