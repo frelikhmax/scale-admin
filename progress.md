@@ -1141,3 +1141,30 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-034`.
+
+
+## 2026-05-15 10:31 — TASK-035 — atomic CatalogVersion publishing
+
+Status: done
+Owner: backend
+Summary:
+- Added atomic backend publishing for active store catalogs via guarded `POST /api/stores/:storeId/publishing/catalog-publish`.
+- Publishing validates first; blocking errors prevent CatalogVersion creation.
+- Successful publish creates immutable `CatalogVersion`, increments `versionNumber` inside `catalogId`, updates `StoreCatalog.currentVersionId`, and writes `AuditLog` inside one transaction.
+- Rollback behavior is covered by focused verification; simulated failure after version creation leaves previous `currentVersionId` unchanged.
+- Confirmed no ordinary CatalogVersion update/delete API was added.
+- Marked TASK-035 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `282079f TASK-035 implement atomic catalog publishing`.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validation: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Focused publishing check: `cd backend && node test/publishing-atomic-check.js` returned `PUBLISHING_ATOMIC_CHECK=PASS`.
+- CatalogVersion mutation API grep returned `CATALOG_VERSION_MUTATION_API_CHECK=PASS`.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-035` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-035`.
