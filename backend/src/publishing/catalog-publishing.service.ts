@@ -20,6 +20,36 @@ export class CatalogPublishingService {
     private readonly catalogPackageService: CatalogPackageService,
   ) {}
 
+  async listCatalogVersions(storeId: string) {
+    const normalizedStoreId = this.normalizeRequiredId(storeId);
+    const versions = await this.prisma.catalogVersion.findMany({
+      where: { storeId: normalizedStoreId },
+      select: {
+        id: true,
+        versionNumber: true,
+        status: true,
+        publishedAt: true,
+        publishedByUserId: true,
+        packageChecksum: true,
+        publishedBy: { select: { fullName: true, email: true } },
+      },
+      orderBy: [{ versionNumber: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    return {
+      versions: versions.map((version) => ({
+        id: version.id,
+        versionNumber: version.versionNumber,
+        status: version.status,
+        publishedAt: version.publishedAt,
+        publishedBy: version.publishedBy?.fullName || version.publishedBy?.email || null,
+        publishedByUserId: version.publishedByUserId,
+        checksum: version.packageChecksum,
+        packageChecksum: version.packageChecksum,
+      })),
+    };
+  }
+
   async publishActiveCatalog(
     storeId: string,
     actorUser: Pick<AuthenticatedUser, 'id'> | undefined,
@@ -128,6 +158,14 @@ export class CatalogPublishingService {
       },
       validation,
     };
+  }
+
+  private normalizeRequiredId(id: string): string {
+    const normalized = id?.trim();
+    if (!normalized) {
+      throw new BadRequestException('Store id is required');
+    }
+    return normalized;
   }
 
   private withVersionMetadata(

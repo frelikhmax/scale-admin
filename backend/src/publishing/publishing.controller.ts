@@ -42,6 +42,11 @@ export class PublishingController {
     return this.catalogPackageService.generateActiveCatalogPackage(storeId);
   }
 
+  @Get('catalog-versions')
+  listCatalogVersions(@Param('storeId') storeId: string) {
+    return this.catalogPublishingService.listCatalogVersions(storeId);
+  }
+
   @Post('catalog-publish')
   publishActiveCatalog(
     @Param('storeId') storeId: string,
