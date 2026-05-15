@@ -124,6 +124,6 @@ const backendBaseQuery: BaseQueryFn<string | FetchArgs, unknown, ApiError> = asy
 export const backendApi = createApi({
   reducerPath: 'backendApi',
   baseQuery: backendBaseQuery,
-  tagTypes: ['Session', 'Stores', 'Products', 'Prices', 'Publishing', 'Users', 'UserStoreAccess', 'ScaleDevices', 'CatalogCategories', 'CatalogPlacements'],
+  tagTypes: ['Session', 'Stores', 'Products', 'Prices', 'Publishing', 'Users', 'UserStoreAccess', 'ScaleDevices', 'CatalogCategories', 'CatalogPlacements', 'AdvertisingBanners'],
   endpoints: () => ({}),
 });
