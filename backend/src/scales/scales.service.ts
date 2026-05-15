@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type ScaleSyncStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { createScaleApiToken, hashScaleApiToken, verifyScaleApiTokenHash } from './scale-token.util';
 
@@ -239,29 +239,78 @@ export class ScalesService {
     };
   }
 
-  async getScaleApiNoUpdateResponse(device: { id: string; storeId: string }, currentCatalogVersionId?: string) {
-    const updatedDevice = await this.prisma.scaleDevice.update({
-      where: { id: device.id },
-      data: {
-        lastSeenAt: new Date(),
-        lastSyncAt: new Date(),
+  async checkScaleUpdate(device: { id: string; storeId: string }, currentCatalogVersionId: string | undefined, context: RequestContext) {
+    const requestedVersionId = this.normalizeOptionalUuid(currentCatalogVersionId, 'currentCatalogVersionId');
+    const now = new Date();
+
+    const activeCatalog = await this.prisma.storeCatalog.findFirst({
+      where: { storeId: device.storeId, status: 'active' },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        currentVersionId: true,
+        currentVersion: {
+          select: {
+            id: true,
+            versionNumber: true,
+            packageChecksum: true,
+            packageData: true,
+          },
+        },
       },
     });
 
-    await this.prisma.scaleSyncLog.create({
-      data: {
-        scaleDeviceId: device.id,
-        storeId: device.storeId,
-        requestedVersionId: currentCatalogVersionId || null,
-        status: 'no_update',
-        errorMessage: null,
-      },
+    if (!activeCatalog) {
+      throw new NotFoundException('Active store catalog not found');
+    }
+
+    const currentVersion = activeCatalog.currentVersion;
+    const currentVersionId = activeCatalog.currentVersionId;
+    const hasUpdate = Boolean(currentVersionId && requestedVersionId !== currentVersionId);
+    const deliveryVersion = hasUpdate ? currentVersion : null;
+    if (hasUpdate && !deliveryVersion) {
+      throw new NotFoundException('Current catalog version not found');
+    }
+
+    const logStatus: ScaleSyncStatus = hasUpdate ? 'package_delivered' : 'no_update';
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.scaleDevice.update({
+        where: { id: device.id },
+        data: { lastSeenAt: now },
+      });
+
+      await tx.scaleSyncLog.create({
+        data: {
+          scaleDeviceId: device.id,
+          storeId: device.storeId,
+          requestedVersionId,
+          deliveredVersionId: hasUpdate ? currentVersionId : null,
+          status: logStatus,
+          errorMessage: null,
+          requestIp: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
     });
+
+    if (!hasUpdate) {
+      return {
+        hasUpdate: false,
+        currentVersionId,
+      };
+    }
+
+    if (!deliveryVersion) {
+      throw new NotFoundException('Current catalog version not found');
+    }
 
     return {
-      status: 'no_update',
-      deviceId: updatedDevice.id,
-      package: null,
+      hasUpdate: true,
+      versionId: deliveryVersion.id,
+      versionNumber: deliveryVersion.versionNumber,
+      packageChecksum: deliveryVersion.packageChecksum,
+      packageData: deliveryVersion.packageData,
     };
   }
 
@@ -333,6 +382,19 @@ export class ScalesService {
     }
 
     throw new BadRequestException('Scale device status must be active, inactive, blocked, or archived');
+  }
+
+  private normalizeOptionalUuid(value: string | undefined, fieldName: string): string | null {
+    const normalizedValue = typeof value === 'string' ? value.trim() : '';
+    if (!normalizedValue) {
+      return null;
+    }
+
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalizedValue)) {
+      throw new BadRequestException(`${fieldName} must be a valid UUID`);
+    }
+
+    return normalizedValue;
   }
 
   private normalizeOptionalString(value: string | undefined): string | null {

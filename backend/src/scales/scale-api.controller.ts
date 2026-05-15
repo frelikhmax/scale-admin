@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { getHeader } from '../auth/cookie.util';
 import { RateLimit } from '../auth/rate-limit.decorator';
 import { RateLimitGuard } from '../auth/rate-limit.guard';
 import { SkipCsrf } from '../auth/skip-csrf.decorator';
@@ -10,21 +11,34 @@ type CheckUpdateBody = {
   currentCatalogVersionId?: unknown;
 };
 
-@Controller('scale-api')
+@Controller()
 @SkipCsrf()
 @UseGuards(RateLimitGuard, ScaleApiAuthGuard)
 @RateLimit({ bucket: 'scale-api', maxAttempts: 20, windowSeconds: 60 })
 export class ScaleApiController {
   constructor(private readonly scalesService: ScalesService) {}
 
-  @Get('auth-check')
+  @Get('scale-api/auth-check')
   authCheck(@CurrentScaleDevice() device: AuthenticatedScaleDevice) {
     return this.scalesService.getScaleApiAuthCheck(device);
   }
 
-  @Post('check-update')
-  checkUpdate(@CurrentScaleDevice() device: AuthenticatedScaleDevice, @Body() body: CheckUpdateBody) {
+  @Post('scales/check-update')
+  checkUpdate(@CurrentScaleDevice() device: AuthenticatedScaleDevice, @Body() body: CheckUpdateBody, @Req() request: any) {
     const currentCatalogVersionId = typeof body.currentCatalogVersionId === 'string' ? body.currentCatalogVersionId : undefined;
-    return this.scalesService.getScaleApiNoUpdateResponse(device, currentCatalogVersionId);
+    return this.scalesService.checkScaleUpdate(device, currentCatalogVersionId, this.getRequestContext(request));
+  }
+
+  @Post('scale-api/check-update')
+  checkUpdateLegacy(@CurrentScaleDevice() device: AuthenticatedScaleDevice, @Body() body: CheckUpdateBody, @Req() request: any) {
+    return this.checkUpdate(device, body, request);
+  }
+
+  private getRequestContext(request: any) {
+    const forwardedFor = getHeader(request, 'x-forwarded-for');
+    return {
+      ipAddress: forwardedFor?.split(',')[0]?.trim() || request.ip || request.socket?.remoteAddress,
+      userAgent: getHeader(request, 'user-agent'),
+    };
   }
 }
