@@ -1390,3 +1390,32 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-040`.
+
+## 2026-05-15T13:08:20+02:00 — TASK-022 — Products page UI
+
+Status: done
+Owner: frontend (manager-bound subagent)
+Summary:
+- Added Products navigation/page for admin and operator users.
+- Added RTK Query Product API integration for list/search/get/create/update using CSRF-protected mutations.
+- Added Products table with PLU, name, shortName, SKU, barcode, unit and status.
+- Added search/status filtering plus create/edit product forms with required-field validation.
+- Added warning display for products used in active catalog placements.
+- Marked TASK-022 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `71a7e61 TASK-022 implement products page UI`.
+- Changed files inspected: `frontend/src/features/products/productsApi.ts`, `frontend/src/main.tsx`, `frontend/src/shared/api/backendApi.ts`, `frontend/src/styles.css`.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Frontend build: `npm --prefix frontend run build` passed.
+- Frontend typecheck: `cd frontend && npm exec tsc -- -b` passed.
+- Backend build skipped because backend was not touched.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-022` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-022`.
