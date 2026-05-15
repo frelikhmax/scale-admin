@@ -936,3 +936,35 @@ Notes:
 
 Next:
 - TASK-024 or another eligible pending task can be selected only after after-task check passes and this task receives a final report.
+
+## 2026-05-15 07:21 — TASK-025 — CatalogProductPlacement CRUD and move flow
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented CatalogProductPlacement list/get/create/update/move/reorder endpoints scoped to the store active catalog.
+- Manager inspected implementation and confirmed placement category ownership is constrained to the active catalog.
+- Active placements require active Product and active Category.
+- One active placement per product per catalog is enforced in service logic; duplicate active add returns move-required conflict metadata.
+- Move and reorder flows persist `categoryId` and `sortOrder` changes.
+- Placement create/move/reorder/status changes write AuditLog entries.
+- Manager verified backend build, Prisma validation, whitespace diff check, and required Docker verification.
+- Marked TASK-025 `status` as `done` after manager verification and Docker verification passed.
+- Released `.openclaw/locks/TASK-025.lock`.
+
+Evidence:
+- Coordination commit: `d7f5e86 chore: assign TASK-025 catalog placements`.
+- Implementation commit: `d49bf7e TASK-025 implement catalog placements CRUD`.
+- Changed implementation files: `backend/src/catalog/catalog.controller.ts`, `backend/src/catalog/catalog.service.ts`.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validation: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Whitespace check: `git diff --check d7f5e86..HEAD` passed.
+- Backend reported focused DB/service checks passed for active product placement, duplicate add move suggestion, move category change, archived product/category rejection, sortOrder persistence, and AuditLog entries.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-025` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- The one-active-placement rule is enforced in backend service logic rather than a partial DB unique index to preserve the PRD requirement that the model can allow multiple placements in the future.
+
+Next:
+- Merge task branch to `main`, push `main` and the task branch, then run `scripts/openclaw-after-task-check.sh TASK-025`.
