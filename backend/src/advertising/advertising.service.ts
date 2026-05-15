@@ -1,0 +1,272 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BannerStatus, Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+
+export type RequestContext = {
+  ipAddress?: string;
+  userAgent?: string;
+};
+
+export type ListBannersInput = {
+  status?: string;
+};
+
+export type CreateBannerInput = {
+  imageUrl: string;
+  imageFileAssetId?: string;
+  status?: string;
+  sortOrder?: number;
+};
+
+export type UpdateBannerInput = {
+  imageUrl?: string;
+  imageFileAssetId?: string | null;
+  status?: string;
+  sortOrder?: number;
+};
+
+export type ChangeBannerStatusInput = {
+  status: string;
+};
+
+export type ReorderBannersInput = {
+  bannerIds: string[];
+};
+
+type BannerRecord = {
+  id: string;
+  storeId: string;
+  imageUrl: string;
+  imageFileAssetId: string | null;
+  status: BannerStatus;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+@Injectable()
+export class AdvertisingService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async listBanners(storeId: string, input: ListBannersInput = {}) {
+    const status = input.status ? this.requireBannerStatus(input.status) : undefined;
+    const banners = await this.prisma.advertisingBanner.findMany({
+      where: { storeId, ...(status ? { status } : {}) },
+      orderBy: [{ status: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return { banners: banners.map((banner) => this.toBannerResponse(banner)) };
+  }
+
+  async getBanner(storeId: string, bannerId: string) {
+    const banner = await this.findBanner(storeId, bannerId);
+    return { banner: this.toBannerResponse(banner) };
+  }
+
+  async createBanner(storeId: string, input: CreateBannerInput, actorUserId: string, context: RequestContext) {
+    const data: Prisma.AdvertisingBannerUncheckedCreateInput = {
+      storeId,
+      imageUrl: this.requireImageUrl(input.imageUrl),
+      imageFileAssetId: this.normalizeOptionalId(input.imageFileAssetId) ?? null,
+      status: this.requireBannerStatus(input.status ?? 'active'),
+      sortOrder: this.requireSortOrder(input.sortOrder ?? 0),
+    };
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const banner = await tx.advertisingBanner.create({ data });
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action: 'advertising_banner.created',
+          entityType: 'AdvertisingBanner',
+          entityId: banner.id,
+          storeId,
+          afterData: this.toBannerAuditData(banner),
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+      return banner;
+    });
+
+    return { banner: this.toBannerResponse(created) };
+  }
+
+  async updateBanner(
+    storeId: string,
+    bannerId: string,
+    input: UpdateBannerInput,
+    actorUserId: string,
+    context: RequestContext,
+  ) {
+    const existing = await this.findBanner(storeId, bannerId);
+    const data: Prisma.AdvertisingBannerUncheckedUpdateInput = {};
+    let action = 'advertising_banner.updated';
+
+    if (input.imageUrl !== undefined) {
+      data.imageUrl = this.requireImageUrl(input.imageUrl);
+    }
+    if (input.imageFileAssetId !== undefined) {
+      data.imageFileAssetId = input.imageFileAssetId === null ? null : this.normalizeOptionalId(input.imageFileAssetId);
+    }
+    if (input.status !== undefined) {
+      data.status = this.requireBannerStatus(input.status);
+      action = data.status === 'archived' ? 'advertising_banner.archived' : 'advertising_banner.status_changed';
+    }
+    if (input.sortOrder !== undefined) {
+      data.sortOrder = this.requireSortOrder(input.sortOrder);
+      action = 'advertising_banner.reordered';
+    }
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('At least one banner field is required');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const banner = await tx.advertisingBanner.update({ where: { id: existing.id }, data });
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action,
+          entityType: 'AdvertisingBanner',
+          entityId: banner.id,
+          storeId,
+          beforeData: this.toBannerAuditData(existing),
+          afterData: this.toBannerAuditData(banner),
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+      return banner;
+    });
+
+    return { banner: this.toBannerResponse(updated) };
+  }
+
+  async changeBannerStatus(
+    storeId: string,
+    bannerId: string,
+    input: ChangeBannerStatusInput,
+    actorUserId: string,
+    context: RequestContext,
+  ) {
+    return this.updateBanner(storeId, bannerId, { status: input.status }, actorUserId, context);
+  }
+
+  async reorderBanners(storeId: string, input: ReorderBannersInput, actorUserId: string, context: RequestContext) {
+    if (!Array.isArray(input.bannerIds) || input.bannerIds.length === 0) {
+      throw new BadRequestException('bannerIds must contain at least one banner id');
+    }
+
+    const bannerIds = input.bannerIds.map((id) => this.requireId(id, 'Banner id is required'));
+    if (new Set(bannerIds).size !== bannerIds.length) {
+      throw new BadRequestException('bannerIds must not contain duplicates');
+    }
+
+    const existing = await this.prisma.advertisingBanner.findMany({
+      where: { storeId, id: { in: bannerIds } },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+    if (existing.length !== bannerIds.length) {
+      throw new NotFoundException('One or more banners not found for store');
+    }
+
+    const beforeById = new Map(existing.map((banner) => [banner.id, banner]));
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const banners: BannerRecord[] = [];
+      for (const [index, bannerId] of bannerIds.entries()) {
+        const banner = await tx.advertisingBanner.update({
+          where: { id: bannerId },
+          data: { sortOrder: index },
+        });
+        banners.push(banner);
+      }
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action: 'advertising_banner.reordered',
+          entityType: 'AdvertisingBanner',
+          entityId: null,
+          storeId,
+          beforeData: existing.map((banner) => this.toBannerAuditData(banner)),
+          afterData: banners.map((banner) => this.toBannerAuditData(banner)),
+          metadata: { bannerIds },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+      return banners.map((banner) => ({ ...banner, status: beforeById.get(banner.id)?.status ?? banner.status }));
+    });
+
+    return { banners: updated.map((banner) => this.toBannerResponse(banner)) };
+  }
+
+  private async findBanner(storeId: string, bannerId: string): Promise<BannerRecord> {
+    const id = this.requireId(bannerId, 'Banner id is required');
+    const banner = await this.prisma.advertisingBanner.findFirst({ where: { id, storeId } });
+    if (!banner) {
+      throw new NotFoundException('Banner not found for store');
+    }
+    return banner;
+  }
+
+  private requireImageUrl(value: string): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new BadRequestException('imageUrl is required');
+    }
+    return value.trim();
+  }
+
+  private requireBannerStatus(status: string): BannerStatus {
+    if (!Object.values(BannerStatus).includes(status as BannerStatus)) {
+      throw new BadRequestException('Unsupported banner status');
+    }
+    return status as BannerStatus;
+  }
+
+  private requireSortOrder(sortOrder: number): number {
+    if (!Number.isInteger(sortOrder) || sortOrder < 0) {
+      throw new BadRequestException('sortOrder must be a non-negative integer');
+    }
+    return sortOrder;
+  }
+
+  private requireId(value: string, message: string): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new BadRequestException(message);
+    }
+    return value.trim();
+  }
+
+  private normalizeOptionalId(value: string | undefined): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  private toBannerResponse(banner: BannerRecord) {
+    return {
+      id: banner.id,
+      storeId: banner.storeId,
+      imageUrl: banner.imageUrl,
+      imageFileAssetId: banner.imageFileAssetId,
+      status: banner.status,
+      sortOrder: banner.sortOrder,
+      createdAt: banner.createdAt,
+      updatedAt: banner.updatedAt,
+    };
+  }
+
+  private toBannerAuditData(banner: BannerRecord) {
+    return {
+      id: banner.id,
+      storeId: banner.storeId,
+      imageUrl: banner.imageUrl,
+      imageFileAssetId: banner.imageFileAssetId,
+      status: banner.status,
+      sortOrder: banner.sortOrder,
+    };
+  }
+}
