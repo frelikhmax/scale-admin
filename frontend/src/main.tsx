@@ -16,6 +16,14 @@ import {
   type PriceRow,
 } from './features/prices/pricesApi';
 import {
+  useGetCatalogVersionsQuery,
+  usePublishCatalogMutation,
+  useValidateCatalogMutation,
+  type CatalogValidationIssue,
+  type CatalogValidationResponse,
+  type PublishCatalogResponse,
+} from './features/publishing/publishingApi';
+import {
   useCreateStoreMutation,
   useGetStoreQuery,
   useListStoresQuery,
@@ -283,9 +291,185 @@ function StoreDetails({ user, storeId, onNavigate }: { user: AuthUser; storeId: 
             <div><dt>Updated</dt><dd>{new Date(store.updatedAt).toLocaleString()}</dd></div>
           </dl>
           <PricesTab storeId={store.id} />
+          <PublishingTab storeId={store.id} />
         </>
       )}
     </section>
+  );
+}
+
+function formatDateTime(value: string | null | undefined) {
+  return value ? new Date(value).toLocaleString() : '—';
+}
+
+function shortChecksum(value: string | null | undefined) {
+  return value ? `${value.slice(0, 12)}…` : '—';
+}
+
+function PublishingTab({ storeId }: { storeId: string }) {
+  const { data: versionsData, error: versionsError, isLoading: versionsLoading, isFetching: versionsFetching, refetch } = useGetCatalogVersionsQuery(storeId);
+  const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
+  const [validateCatalog, { isLoading: validating }] = useValidateCatalogMutation();
+  const [publishCatalog, { isLoading: publishing }] = usePublishCatalogMutation();
+  const [validation, setValidation] = useState<CatalogValidationResponse | null>(null);
+  const [lastPublished, setLastPublished] = useState<PublishCatalogResponse['version'] | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const versions = versionsData?.versions ?? [];
+  const versionsErrorMessage = versionsError && 'message' in versionsError ? versionsError.message : null;
+  const hasBlockingErrors = Boolean(validation && validation.blockingErrors.length > 0);
+  const canPublish = Boolean(validation?.canPublish) && !hasBlockingErrors;
+
+  async function getCsrfOrThrow() {
+    const csrfData = csrf ?? (await refetchCsrf()).data;
+    if (!csrfData) {
+      throw new Error('Не удалось подготовить защищённую форму. Повторите попытку.');
+    }
+    return csrfData;
+  }
+
+  async function handleValidate() {
+    setActionError(null);
+    setLastPublished(null);
+
+    try {
+      const csrfData = await getCsrfOrThrow();
+      const response = await validateCatalog({
+        storeId,
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setValidation(response);
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : 'Catalog validation could not be completed.';
+      setActionError(message);
+    }
+  }
+
+  async function handlePublish() {
+    setActionError(null);
+
+    if (!canPublish) {
+      setActionError('Run validation and resolve blocking errors before publishing.');
+      return;
+    }
+
+    try {
+      const csrfData = await getCsrfOrThrow();
+      const response = await publishCatalog({
+        storeId,
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setValidation(response.validation);
+      setLastPublished(response.version);
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : 'Catalog could not be published.';
+      setActionError(message);
+    }
+  }
+
+  return (
+    <section className="publishing-tab" aria-labelledby="publishing-title">
+      <div className="panel-heading publishing-heading">
+        <div>
+          <p className="eyebrow">Versions / Publishing</p>
+          <h3 id="publishing-title">Validate and publish catalog versions</h3>
+          <p className="muted">After a catalog is published, later changes require a new validation and a new version.</p>
+        </div>
+        <div className="action-row">
+          <button className="secondary-button" type="button" onClick={handleValidate} disabled={validating || publishing}>
+            {validating ? 'Validating...' : 'Run validation'}
+          </button>
+          <button type="button" onClick={handlePublish} disabled={publishing || validating || !canPublish}>
+            {publishing ? 'Publishing...' : 'Publish catalog'}
+          </button>
+        </div>
+      </div>
+
+      {actionError && <div className="form-error" role="alert">{actionError}</div>}
+      {lastPublished && (
+        <div className="status status-ok" role="status">
+          Published version <strong>v{lastPublished.versionNumber}</strong> at {formatDateTime(lastPublished.publishedAt)}.
+        </div>
+      )}
+
+      {validation ? (
+        <div className="validation-grid">
+          <div className={`validation-summary ${validation.canPublish ? 'validation-summary-ok' : 'validation-summary-blocked'}`}>
+            <strong>{validation.canPublish ? 'Ready to publish' : 'Publication blocked'}</strong>
+            <span>{validation.blockingErrors.length} blocking errors · {validation.warnings.length} warnings</span>
+            <span>{validation.summary.categoryCount} categories · {validation.summary.activePlacementCount} active products · {validation.summary.activeBannerCount} active banners</span>
+          </div>
+          <IssueList title="Blocking errors" issues={validation.blockingErrors} emptyText="No blocking errors found." tone="error" />
+          <IssueList title="Warnings" issues={validation.warnings} emptyText="No warnings found." tone="warning" />
+        </div>
+      ) : (
+        <div className="empty-state">Run validation to see blocking errors, warnings and publishing readiness.</div>
+      )}
+
+      <div className="version-history-heading">
+        <div>
+          <h4>Version history</h4>
+          <p className="muted">Published versions include version number, publication date, publisher and package checksum.</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => refetch()} disabled={versionsFetching}>
+          {versionsFetching ? 'Refreshing...' : 'Refresh history'}
+        </button>
+      </div>
+
+      {versionsLoading && <div className="status status-loading">Loading version history...</div>}
+      {versionsErrorMessage && <div className="form-error" role="alert">{versionsErrorMessage}</div>}
+      {!versionsLoading && !versionsErrorMessage && versions.length === 0 && <div className="empty-state">No published versions yet.</div>}
+      {versions.length > 0 && (
+        <div className="version-table-wrap">
+          <table className="version-table">
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>Published at</th>
+                <th>Published by</th>
+                <th>Checksum</th>
+              </tr>
+            </thead>
+            <tbody>
+              {versions.map((version) => (
+                <tr key={version.id}>
+                  <td>v{version.versionNumber}</td>
+                  <td>{formatDateTime(version.publishedAt)}</td>
+                  <td>{version.publishedBy ?? 'System'}</td>
+                  <td><code title={version.checksum}>{shortChecksum(version.checksum)}</code></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function IssueList({ title, issues, emptyText, tone }: { title: string; issues: CatalogValidationIssue[]; emptyText: string; tone: 'error' | 'warning' }) {
+  return (
+    <div className={`issue-list issue-list-${tone}`}>
+      <h4>{title}</h4>
+      {issues.length === 0 ? (
+        <p className="muted">{emptyText}</p>
+      ) : (
+        <ul>
+          {issues.map((issue, index) => (
+            <li key={`${issue.code}-${issue.entityId ?? index}`}>
+              <strong>{issue.code}</strong>
+              <span>{issue.message}</span>
+              {(issue.entityType || issue.entityId) && <small>{[issue.entityType, issue.entityId].filter(Boolean).join(' · ')}</small>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

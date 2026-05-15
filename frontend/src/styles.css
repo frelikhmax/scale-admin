@@ -491,3 +491,145 @@ select:focus {
     grid-template-columns: 1fr;
   }
 }
+
+.publishing-tab {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #dce4f3;
+}
+
+.publishing-heading h3,
+.version-history-heading h4,
+.issue-list h4 {
+  margin: 0;
+}
+
+.publishing-tab .status,
+.publishing-tab .form-error {
+  margin-bottom: 1rem;
+}
+
+.validation-grid {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.validation-summary {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem;
+  border-radius: 16px;
+  border: 1px solid #dce4f3;
+  background: #f8faff;
+}
+
+.validation-summary-ok {
+  color: #0d6832;
+  border-color: #9edbb4;
+  background: #effaf2;
+}
+
+.validation-summary-blocked {
+  color: #9d1c28;
+  border-color: #f0adb4;
+  background: #fff4f5;
+}
+
+.issue-list {
+  padding: 1rem;
+  border: 1px solid #dce4f3;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.issue-list-error {
+  border-color: #f0adb4;
+}
+
+.issue-list-warning {
+  border-color: #f4d48a;
+}
+
+.issue-list ul {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0.75rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.issue-list li strong,
+.issue-list li span,
+.issue-list li small {
+  display: block;
+}
+
+.issue-list li strong {
+  color: #172033;
+}
+
+.issue-list li small {
+  margin-top: 0.2rem;
+  color: #6b778d;
+}
+
+.version-history-heading {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 1.25rem 0 1rem;
+}
+
+.version-history-heading button {
+  margin-top: 0;
+}
+
+.version-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #dce4f3;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.version-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.version-table th,
+.version-table td {
+  padding: 0.85rem;
+  border-bottom: 1px solid #e8eef8;
+  text-align: left;
+  vertical-align: top;
+}
+
+.version-table th {
+  color: #50617f;
+  background: #f8faff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.version-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.version-table code {
+  color: #38445c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (max-width: 720px) {
+  .version-history-heading {
+    display: grid;
+  }
+
+  .version-history-heading button {
+    width: 100%;
+  }
+}
