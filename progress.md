@@ -1505,3 +1505,31 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-030`.
+
+## 2026-05-15T14:22:00+02:00 — TASK-032 — Advertising tab UI
+
+Status: done
+Owner: frontend (manager-bound subagent)
+Summary:
+- Added Store Details → Advertising section for banner management.
+- Implemented banner list, image upload/create flow, status changes and move up/down reorder actions.
+- Added clear JPG/PNG/WebP and 2 MB validation messages.
+- Added publication-required notice for banner uploads, status changes and ordering changes.
+- Marked TASK-032 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `60bb4d0 TASK-032 add advertising banner tab UI`.
+- Changed files inspected: `frontend/src/features/advertising/advertisingApi.ts`, `frontend/src/main.tsx`, `frontend/src/shared/api/backendApi.ts`, `frontend/src/styles.css`.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Frontend build: `npm --prefix frontend run build` passed.
+- Frontend typecheck: `cd frontend && npm exec tsc -- -b` passed.
+- Focused TASK-032 source check passed for Store Details reachability, upload endpoint, create endpoint, validation errors, status/reorder wiring and publication-required message.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-032` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-032`.
