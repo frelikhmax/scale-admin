@@ -1533,3 +1533,36 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-032`.
+
+## 2026-05-15T14:36:00+02:00 — TASK-042 — Global Logs and Store Logs UI
+
+Status: done
+Owner: frontend (manager-bound subagent)
+Summary:
+- Added admin-only Global Logs navigation/page with AuditLog and ScaleSyncLog lists.
+- Added Store Details → Logs section scoped to the selected store.
+- Added read-only guarded backend logs endpoints for global logs and store logs.
+- Added filters for store, entity/action/status and date where applicable.
+- Ensured operators cannot open Global Logs and store logs are protected by store access.
+- API responses omit audit payload JSON and sensitive request/token/hash/password fields.
+- Marked TASK-042 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected/amended: `1b8caec TASK-042 implement logs UI`.
+- Changed files inspected: `backend/src/logs/logs.controller.ts`, `backend/src/logs/logs.service.ts`, `backend/src/logs/logs.module.ts`, `frontend/src/features/logs/logsApi.ts`, `frontend/src/main.tsx`, `frontend/src/shared/api/backendApi.ts`, `frontend/src/styles.css`.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Frontend build: `npm --prefix frontend run build` passed.
+- Frontend typecheck: `cd frontend && npm exec tsc -- -b` passed.
+- Backend build: `npm --prefix backend run build` passed.
+- Prisma validate: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Focused TASK-042 source/access check passed for admin-only Global Logs, operator denial, Store Details Logs reachability, scoped store logs, filters and secret-field omission.
+- Docker verification initially failed because `LogsModule` did not import `AuthModule` for guard provider resolution; manager fixed the integration issue and reran successfully.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-042` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-042`.
