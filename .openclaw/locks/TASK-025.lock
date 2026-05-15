@@ -1,0 +1,4 @@
+TASK_ID=TASK-025
+AGENT=backend
+BRANCH=task/TASK-025-catalog-product-placement-crud
+STATUS=assigned
