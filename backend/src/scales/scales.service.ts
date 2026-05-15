@@ -19,6 +19,12 @@ export type UpdateScaleDeviceStatusInput = {
   status: string;
 };
 
+export type ScaleAckInput = {
+  versionId?: string;
+  status?: string;
+  errorMessage?: string;
+};
+
 export type ScaleApiAuthResult =
   | {
       authenticated: true;
@@ -314,6 +320,77 @@ export class ScalesService {
     };
   }
 
+  async acknowledgeScaleCatalogVersion(device: { id: string; storeId: string }, input: ScaleAckInput, context: RequestContext) {
+    const versionId = this.requireUuid(input.versionId, 'versionId');
+    const status = this.requireAckStatus(input.status);
+    const errorMessage = status === 'error' ? this.normalizeErrorMessage(input.errorMessage) : null;
+    const now = new Date();
+
+    const catalogVersion = await this.prisma.catalogVersion.findFirst({
+      where: { id: versionId, storeId: device.storeId },
+      select: { id: true, versionNumber: true, packageChecksum: true },
+    });
+    if (!catalogVersion) {
+      throw new NotFoundException('Catalog version not found');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (status === 'success') {
+        await tx.scaleDevice.update({
+          where: { id: device.id },
+          data: {
+            currentCatalogVersionId: catalogVersion.id,
+            lastSyncAt: now,
+          },
+        });
+      }
+
+      await tx.scaleSyncLog.create({
+        data: {
+          scaleDeviceId: device.id,
+          storeId: device.storeId,
+          requestedVersionId: null,
+          deliveredVersionId: catalogVersion.id,
+          status: status === 'success' ? 'ack_received' : 'error',
+          errorMessage,
+          requestIp: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+
+      if (status === 'success') {
+        await tx.auditLog.create({
+          data: {
+            actorUserId: null,
+            action: 'scale_device.catalog_version_acknowledged',
+            entityType: 'ScaleDevice',
+            entityId: device.id,
+            storeId: device.storeId,
+            afterData: {
+              currentCatalogVersionId: catalogVersion.id,
+              lastSyncAt: now.toISOString(),
+            },
+            metadata: {
+              versionId: catalogVersion.id,
+              versionNumber: catalogVersion.versionNumber,
+              packageChecksum: catalogVersion.packageChecksum,
+              ackStatus: 'success',
+            },
+            ipAddress: context.ipAddress,
+            userAgent: context.userAgent,
+          },
+        });
+      }
+    });
+
+    return {
+      acknowledged: true,
+      status,
+      versionId: catalogVersion.id,
+      lastSyncAt: status === 'success' ? now.toISOString() : null,
+    };
+  }
+
   private async writeScaleAuthFailureLog(
     scaleDeviceId: string | null,
     storeId: string | null,
@@ -390,11 +467,40 @@ export class ScalesService {
       return null;
     }
 
+    return this.requireUuid(normalizedValue, fieldName);
+  }
+
+  private requireUuid(value: string | undefined, fieldName: string): string {
+    const normalizedValue = typeof value === 'string' ? value.trim() : '';
+    if (!normalizedValue) {
+      throw new BadRequestException(`${fieldName} is required`);
+    }
+
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalizedValue)) {
       throw new BadRequestException(`${fieldName} must be a valid UUID`);
     }
 
     return normalizedValue;
+  }
+
+  private requireAckStatus(status: string | undefined): 'success' | 'error' {
+    if (status === 'success' || status === 'error') {
+      return status;
+    }
+
+    throw new BadRequestException('ACK status must be success or error');
+  }
+
+  private normalizeErrorMessage(errorMessage: string | undefined): string | null {
+    const normalizedValue = typeof errorMessage === 'string' ? errorMessage.trim() : '';
+    if (!normalizedValue) {
+      return null;
+    }
+
+    return normalizedValue
+      .replace(/(apiToken\s*[=:]\s*)[^\s,;]+/gi, '$1[REDACTED]')
+      .replace(/(api_token\s*[=:]\s*)[^\s,;]+/gi, '$1[REDACTED]')
+      .slice(0, 1000);
   }
 
   private normalizeOptionalString(value: string | undefined): string | null {
