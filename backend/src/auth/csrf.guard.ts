@@ -1,14 +1,24 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { getCookie, getHeader } from './cookie.util';
 import { CsrfService } from './csrf.service';
+import { SKIP_CSRF_METADATA } from './skip-csrf.decorator';
 
 const safeMethods = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 @Injectable()
 export class CsrfGuard implements CanActivate {
-  constructor(private readonly csrfService: CsrfService) {}
+  constructor(
+    private readonly csrfService: CsrfService,
+    private readonly reflector: Reflector,
+  ) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const skipCsrf = this.reflector.getAllAndOverride<boolean>(SKIP_CSRF_METADATA, [context.getHandler(), context.getClass()]);
+    if (skipCsrf) {
+      return true;
+    }
+
     const request = context.switchToHttp().getRequest<{ method?: string; headers?: Record<string, string | string[] | undefined> }>();
     const method = request.method?.toUpperCase() ?? 'GET';
     if (safeMethods.has(method)) {
