@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, StrictMode, useEffect, useMemo, useState } from 'react';
+import { type ChangeEvent, type FormEvent, type ReactNode, StrictMode, useEffect, useMemo, useState } from 'react';
 import { Provider } from 'react-redux';
 import { createRoot } from 'react-dom/client';
 import { store } from './app/store';
@@ -31,6 +31,11 @@ import {
   type CatalogProductPlacement,
   type CategoryStatus,
 } from './features/catalog/catalogApi';
+import {
+  useGetAdminDashboardQuery,
+  type AdminDashboardLatestSyncError,
+  type AdminDashboardProblematicScaleDevice,
+} from './features/dashboard/dashboardApi';
 import { useGetHealthQuery } from './features/health/healthApi';
 import {
   useListGlobalLogsQuery,
@@ -2680,6 +2685,260 @@ function OperatorStoreAccess({ userId }: { userId: string }) {
   );
 }
 
+
+function OverviewDashboard({ user, onNavigate }: { user: AuthUser; onNavigate: (view: DashboardView) => void }) {
+  return user.role === 'admin'
+    ? <AdminDashboardOverview onNavigate={onNavigate} />
+    : <OperatorDashboardOverview onNavigate={onNavigate} />;
+}
+
+function AdminDashboardOverview({ onNavigate }: { onNavigate: (view: DashboardView) => void }) {
+  const { data, error, isLoading, isFetching, refetch } = useGetAdminDashboardQuery();
+  const errorMessage = error && 'message' in error ? error.message : null;
+
+  return (
+    <section className="panel dashboard-overview" aria-labelledby="admin-dashboard-title">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">Admin dashboard</p>
+          <h2 id="admin-dashboard-title">Fleet overview</h2>
+          <p className="muted">Stores, scale health, published versions and recent sync failures.</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? 'Refreshing...' : 'Refresh dashboard'}
+        </button>
+      </div>
+
+      {isLoading && <div className="status status-loading">Loading admin dashboard...</div>}
+      {errorMessage && <div className="form-error" role="alert">{errorMessage}</div>}
+
+      {data && (
+        <>
+          <div className="metric-grid" aria-label="Admin dashboard totals">
+            <MetricCard label="Stores" value={data.counts.stores} />
+            <MetricCard label="Scales" value={data.counts.scaleDevices} />
+            <MetricCard label="Scales with errors" value={data.counts.scaleDevicesWithErrors} tone={data.counts.scaleDevicesWithErrors > 0 ? 'danger' : 'ok'} />
+            <MetricCard label="Without synchronization" value={data.counts.scaleDevicesWithoutSynchronization} tone={data.counts.scaleDevicesWithoutSynchronization > 0 ? 'warning' : 'ok'} />
+          </div>
+
+          <div className="dashboard-section-grid">
+            <DashboardList title="Latest published versions" emptyText="No published catalog versions yet.">
+              {data.latestPublishedVersions.map((version) => (
+                <li className="dashboard-list-item" key={version.id}>
+                  <div>
+                    <strong>{version.storeCode} · {version.storeName}</strong>
+                    <span className="muted block">{version.catalogName} · v{version.versionNumber}</span>
+                  </div>
+                  <span className="muted">{formatDateTime(version.publishedAt ?? version.createdAt)}</span>
+                </li>
+              ))}
+            </DashboardList>
+
+            <DashboardList title="Latest sync errors" emptyText="No recent sync errors.">
+              {data.latestSyncErrors.map((syncError) => (
+                <LatestSyncErrorItem error={syncError} key={syncError.id} onNavigate={onNavigate} />
+              ))}
+            </DashboardList>
+          </div>
+
+          <section className="dashboard-subsection" aria-labelledby="problematic-scales-title">
+            <div className="section-heading-row">
+              <div>
+                <h3 id="problematic-scales-title">Problematic scales</h3>
+                <p className="muted">Highlighted scales have a sync error, missing sync or outdated catalog.</p>
+              </div>
+            </div>
+            {data.problematicScaleDevices.length === 0 ? (
+              <div className="empty-state">No problematic scales detected.</div>
+            ) : (
+              <div className="problem-scale-grid">
+                {data.problematicScaleDevices.map((device) => (
+                  <ProblematicScaleCard device={device} key={device.id} onNavigate={onNavigate} />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="quick-links" aria-labelledby="quick-links-title">
+            <h3 id="quick-links-title">Quick links</h3>
+            <div className="action-row">
+              <button className="secondary-button" type="button" onClick={() => onNavigate({ name: 'stores' })}>Stores</button>
+              <button className="secondary-button" type="button" onClick={() => onNavigate({ name: 'products' })}>Products</button>
+              <button className="secondary-button" type="button" onClick={() => onNavigate({ name: 'global-logs' })}>Global logs</button>
+              <button className="secondary-button" type="button" onClick={() => onNavigate({ name: 'users-access' })}>Users & access</button>
+            </div>
+          </section>
+        </>
+      )}
+    </section>
+  );
+}
+
+function MetricCard({ label, value, tone = 'neutral' }: { label: string; value: number; tone?: 'neutral' | 'ok' | 'warning' | 'danger' }) {
+  return (
+    <div className={`metric-card metric-card-${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function DashboardList({ title, emptyText, children }: { title: string; emptyText: string; children: ReactNode }) {
+  const items = Array.isArray(children) ? children.filter(Boolean) : children;
+  const isEmpty = Array.isArray(items) ? items.length === 0 : !items;
+
+  return (
+    <section className="dashboard-subsection" aria-label={title}>
+      <h3>{title}</h3>
+      {isEmpty ? <div className="empty-state">{emptyText}</div> : <ul className="dashboard-list">{items}</ul>}
+    </section>
+  );
+}
+
+function LatestSyncErrorItem({ error, onNavigate }: { error: AdminDashboardLatestSyncError; onNavigate: (view: DashboardView) => void }) {
+  return (
+    <li className="dashboard-list-item dashboard-list-item-danger">
+      <div>
+        <strong>{error.deviceCode} · {error.deviceName}</strong>
+        <span className="muted block">{error.storeCode} · {error.storeName}</span>
+        <span className="inline-error block">{error.message ?? error.status}</span>
+      </div>
+      <div className="dashboard-list-actions">
+        <span className="muted">{formatDateTime(error.createdAt)}</span>
+        <button className="secondary-button table-action" type="button" onClick={() => onNavigate({ name: 'store-details', storeId: error.storeId })}>
+          Open store
+        </button>
+      </div>
+    </li>
+  );
+}
+
+function ProblematicScaleCard({ device, onNavigate }: { device: AdminDashboardProblematicScaleDevice; onNavigate: (view: DashboardView) => void }) {
+  return (
+    <article className="problem-scale-card">
+      <div className="problem-scale-heading">
+        <div>
+          <p className="store-code">{device.storeCode} · {device.storeName}</p>
+          <h4>{device.deviceCode} · {device.name}</h4>
+        </div>
+        <span className={`badge badge-${device.status}`}>{device.status}</span>
+      </div>
+      <div className="reason-row">
+        {device.reasons.map((reason) => <span className="badge badge-danger" key={reason}>{reason.replace(/_/g, ' ')}</span>)}
+      </div>
+      <dl className="compact-details">
+        <div><dt>Current version</dt><dd>{device.currentCatalogVersionId ?? '—'}</dd></div>
+        <div><dt>Expected version</dt><dd>{device.expectedCatalogVersionId ?? '—'}</dd></div>
+        <div><dt>Last sync</dt><dd>{formatDateTime(device.lastSyncAt)}</dd></div>
+      </dl>
+      {device.lastSyncError?.message && <div className="inline-error">{device.lastSyncError.message}</div>}
+      <button className="secondary-button" type="button" onClick={() => onNavigate({ name: 'store-details', storeId: device.storeId })}>
+        Open store
+      </button>
+    </article>
+  );
+}
+
+function OperatorDashboardOverview({ onNavigate }: { onNavigate: (view: DashboardView) => void }) {
+  const { data, error, isLoading, isFetching, refetch } = useListStoresQuery();
+  const stores = data?.stores ?? [];
+  const errorMessage = error && 'message' in error ? error.message : null;
+
+  return (
+    <section className="panel dashboard-overview" aria-labelledby="operator-dashboard-title">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">Operator dashboard</p>
+          <h2 id="operator-dashboard-title">Assigned stores</h2>
+          <p className="muted">Only stores assigned to your account are shown here.</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? 'Refreshing...' : 'Refresh stores'}
+        </button>
+      </div>
+
+      {isLoading && <div className="status status-loading">Loading assigned stores...</div>}
+      {errorMessage && <div className="form-error" role="alert">{errorMessage}</div>}
+      {!isLoading && !errorMessage && stores.length === 0 && <div className="empty-state">No stores are assigned to your account.</div>}
+
+      {stores.length > 0 && (
+        <div className="operator-store-grid">
+          {stores.map((store) => <OperatorStoreDashboardCard key={store.id} store={store} onNavigate={onNavigate} />)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function OperatorStoreDashboardCard({ store, onNavigate }: { store: Store; onNavigate: (view: DashboardView) => void }) {
+  const { data: versionsData, error: versionsError, isLoading: versionsLoading } = useGetCatalogVersionsQuery(store.id);
+  const { data: scalesData, error: scalesError, isLoading: scalesLoading } = useListScaleDevicesQuery(store.id);
+  const currentVersion = versionsData?.currentVersion ?? null;
+  const devices = scalesData?.devices ?? [];
+  const devicesWithErrors = devices.filter((device) => device.lastSyncError || device.lastSyncStatus === 'error' || device.lastSyncStatus === 'auth_failed');
+  const devicesMissingSync = devices.filter((device) => !device.lastSyncAt || !device.currentCatalogVersionId);
+  const devicesOutdated = devices.filter((device) => currentVersion?.id && device.currentCatalogVersionId && device.currentCatalogVersionId !== currentVersion.id);
+  const problematicDeviceIds = new Set([...devicesWithErrors, ...devicesMissingSync, ...devicesOutdated].map((device) => device.id));
+  const hasProblems = problematicDeviceIds.size > 0;
+  const errorMessage = [versionsError, scalesError].map((apiError) => apiError && 'message' in apiError ? apiError.message : null).filter(Boolean).join(' ');
+
+  return (
+    <article className={hasProblems ? 'operator-store-card operator-store-card-problem' : 'operator-store-card'}>
+      <div className="problem-scale-heading">
+        <div>
+          <p className="store-code">{store.code}</p>
+          <h3>{store.name}</h3>
+          <p className="muted">{store.address || 'No address'} · {store.timezone}</p>
+        </div>
+        <span className={`badge badge-${store.status}`}>{store.status}</span>
+      </div>
+
+      {errorMessage && <div className="form-error" role="alert">{errorMessage}</div>}
+      {(versionsLoading || scalesLoading) && <div className="status status-loading">Loading store dashboard...</div>}
+
+      <dl className="compact-details">
+        <div><dt>Current version</dt><dd>{versionsLoading ? 'Loading…' : formatVersionLabel(currentVersion)}</dd></div>
+        <div><dt>Publication status</dt><dd>{currentVersion?.status ?? 'not published'}</dd></div>
+        <div><dt>Sync status</dt><dd>{syncSummary(devices.length, problematicDeviceIds.size)}</dd></div>
+        <div><dt>Errors</dt><dd>{devicesWithErrors.length}</dd></div>
+      </dl>
+
+      {hasProblems && (
+        <div className="reason-row">
+          {devicesWithErrors.length > 0 && <span className="badge badge-danger">{devicesWithErrors.length} error</span>}
+          {devicesMissingSync.length > 0 && <span className="badge badge-warning">{devicesMissingSync.length} missing sync</span>}
+          {devicesOutdated.length > 0 && <span className="badge badge-warning">{devicesOutdated.length} outdated</span>}
+        </div>
+      )}
+
+      {devicesWithErrors.length > 0 && (
+        <ul className="dashboard-list compact-error-list">
+          {devicesWithErrors.slice(0, 3).map((device) => (
+            <li className="dashboard-list-item dashboard-list-item-danger" key={device.id}>
+              <div>
+                <strong>{device.deviceCode} · {device.name}</strong>
+                <span className="inline-error block">{device.lastSyncError?.message ?? device.lastSyncStatus ?? 'sync error'}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <button type="button" onClick={() => onNavigate({ name: 'store-details', storeId: store.id })}>
+        Open catalog
+      </button>
+    </article>
+  );
+}
+
+function syncSummary(totalDevices: number, problematicCount: number) {
+  if (totalDevices === 0) {
+    return 'No scales connected';
+  }
+
+  return problematicCount === 0 ? `${totalDevices} synced` : `${problematicCount} of ${totalDevices} need attention`;
+}
+
 function DashboardContent({ user, view, onNavigate }: { user: AuthUser; view: DashboardView; onNavigate: (view: DashboardView) => void }) {
   if (view.name === 'global-logs') {
     return user.role === 'admin' ? <GlobalLogsPage user={user} /> : <AccessDeniedPanel />;
@@ -2717,13 +2976,17 @@ function DashboardContent({ user, view, onNavigate }: { user: AuthUser; view: Da
     return <StoreEditRoute storeId={view.storeId} onNavigate={onNavigate} />;
   }
 
-  return <HealthStatus />;
+  return <OverviewDashboard user={user} onNavigate={onNavigate} />;
 }
 
 function viewFromHash(): DashboardView {
   const hash = window.location.hash;
   if (hash === '#global-logs') return { name: 'global-logs' };
   if (hash === '#users-access') return { name: 'users-access' };
+  if (hash === '#stores') return { name: 'stores' };
+  if (hash === '#store-create') return { name: 'store-create' };
+  if (hash.startsWith('#store:')) return { name: 'store-details', storeId: hash.slice('#store:'.length) };
+  if (hash.startsWith('#store-edit:')) return { name: 'store-edit', storeId: hash.slice('#store-edit:'.length) };
   if (hash === '#products') return { name: 'products' };
   if (hash === '#product-create') return { name: 'product-create' };
   if (hash.startsWith('#product-edit:')) return { name: 'product-edit', productId: hash.slice('#product-edit:'.length) };
@@ -2733,6 +2996,10 @@ function viewFromHash(): DashboardView {
 function hashFromView(view: DashboardView) {
   if (view.name === 'global-logs') return '#global-logs';
   if (view.name === 'users-access') return '#users-access';
+  if (view.name === 'stores') return '#stores';
+  if (view.name === 'store-create') return '#store-create';
+  if (view.name === 'store-details') return `#store:${view.storeId}`;
+  if (view.name === 'store-edit') return `#store-edit:${view.storeId}`;
   if (view.name === 'products') return '#products';
   if (view.name === 'product-create') return '#product-create';
   if (view.name === 'product-edit') return `#product-edit:${view.productId}`;
