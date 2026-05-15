@@ -1088,3 +1088,29 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main` and the task branch, then run `scripts/openclaw-after-task-check.sh TASK-031`.
+
+## 2026-05-15 09:50 — TASK-033 — Catalog validation service
+
+Status: done
+Owner: backend
+Summary:
+- Added backend CatalogValidationService for active catalog publishing-readiness checks.
+- Added guarded publishing validation endpoints: `POST /api/stores/:storeId/publishing/catalog-validation` and `GET /api/stores/:storeId/publishing/catalog-validation`.
+- Validation returns `canPublish`, separate `blockingErrors` and `warnings`, and summary counts.
+- Manager fixed PublishingModule auth wiring so SessionGuard/StoreAccessGuard dependencies resolve at runtime.
+- Validation is read-only and does not create CatalogVersion or mutate publishing/version state.
+- Marked TASK-033 `status` as `done` after build, Prisma validation, focused backend verification, and Docker verification passed.
+
+Evidence:
+- Implementation commits: `820ac0a TASK-033 implement catalog validation service`, `9806526 TASK-033 fix publishing auth module wiring`.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validation: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Developer focused verification passed for valid catalog, missing price blocking error, archived-category active placement blocking error, non-blocking warning scenario, and no CatalogVersion creation/mutation.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-033` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/` and `.openclaw/handoffs/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-033`.
