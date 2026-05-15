@@ -1358,3 +1358,35 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-020`.
+
+
+## 2026-05-15T12:45:57+02:00 — TASK-040 — Scale sync status in Store Details and Versions UI
+
+Status: done
+Owner: frontend (manager-bound subagent)
+Summary:
+- Added current published catalog version display to Store Details and Versions / Publishing UI.
+- Added scale sync status visibility for devices: currentCatalogVersionId, lastSeenAt, lastSyncAt, latest sync status and latest sync error.
+- Highlighted devices that have not ACKed the current published version.
+- Kept admin validate/publish/device controls gated while operators receive read-only publication/sync status.
+- Backend list endpoints expose current published version and latest sync status/error without exposing apiToken/apiTokenHash.
+- Marked TASK-040 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `53392c9 TASK-040 add scale sync status UI`.
+- Changed files inspected: backend/src/publishing/catalog-publishing.service.ts, backend/src/scales/scales.service.ts, frontend/src/features/publishing/publishingApi.ts, frontend/src/features/scales/scalesApi.ts, frontend/src/main.tsx, frontend/src/styles.css.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Frontend build: `npm --prefix frontend run build` passed.
+- Frontend typecheck: `cd frontend && npm exec tsc -- -b` passed.
+- Backend build: `npm --prefix backend run build` passed.
+- Prisma validation: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Focused source check: `TASK_040_FOCUSED_SOURCE_CHECK=PASS`.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-040` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-040`.
