@@ -11,6 +11,12 @@ type CheckUpdateBody = {
   currentCatalogVersionId?: unknown;
 };
 
+type AckBody = {
+  versionId?: unknown;
+  status?: unknown;
+  errorMessage?: unknown;
+};
+
 @Controller()
 @SkipCsrf()
 @UseGuards(RateLimitGuard, ScaleApiAuthGuard)
@@ -32,6 +38,19 @@ export class ScaleApiController {
   @Post('scale-api/check-update')
   checkUpdateLegacy(@CurrentScaleDevice() device: AuthenticatedScaleDevice, @Body() body: CheckUpdateBody, @Req() request: any) {
     return this.checkUpdate(device, body, request);
+  }
+
+  @Post('scales/ack')
+  acknowledgeCatalogVersion(@CurrentScaleDevice() device: AuthenticatedScaleDevice, @Body() body: AckBody, @Req() request: any) {
+    return this.scalesService.acknowledgeScaleCatalogVersion(
+      device,
+      {
+        versionId: typeof body.versionId === 'string' ? body.versionId : undefined,
+        status: typeof body.status === 'string' ? body.status : undefined,
+        errorMessage: typeof body.errorMessage === 'string' ? body.errorMessage : undefined,
+      },
+      this.getRequestContext(request),
+    );
   }
 
   private getRequestContext(request: any) {
