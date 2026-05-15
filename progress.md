@@ -1476,3 +1476,32 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-026`.
+
+## 2026-05-15T14:13:00+02:00 — TASK-030 — Product image upload integration
+
+Status: done
+Owner: frontend (manager-bound subagent)
+Summary:
+- Integrated Product create/edit UI with authenticated image upload through the existing Files API.
+- Upload stores `Product.imageUrl` as the uploaded `FileAsset.publicUrl` and includes `imageFileAssetId` on save.
+- Product image can be replaced during edit.
+- Invalid `.gif` files and files larger than 2 MB show clear UI errors.
+- Product `imageUrl` changes continue through the existing product update path, preserving product AuditLog behavior.
+- Marked TASK-030 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `95b498d TASK-030 integrate product image upload`.
+- Changed files inspected: `frontend/src/features/products/productsApi.ts`, `frontend/src/main.tsx`, `frontend/src/styles.css`.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Frontend build: `npm --prefix frontend run build` passed.
+- Frontend typecheck: `cd frontend && npm exec tsc -- -b` passed.
+- Focused TASK-030 source check passed for upload endpoint, validation messages, and persistence fields.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-030` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-030`.
