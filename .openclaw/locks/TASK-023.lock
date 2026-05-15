@@ -1,0 +1,4 @@
+TASK_ID=TASK-023
+AGENT=backend
+BRANCH=task/TASK-023-category-crud-tree
+STATUS=assigned
