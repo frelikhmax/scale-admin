@@ -1626,3 +1626,29 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-044`.
+
+## 2026-05-15T18:51:05+02:00 — TASK-045 — end-to-end security regression
+
+Status: done
+Owner: backend (manager-bound subagent)
+Summary:
+- Added focused backend security regression coverage for RBAC store isolation, blocked-user login/session invalidation, CSRF enforcement, production cookie attributes, secret redaction/exposure, and Scale API token/device rejection.
+- Manager inspected scope: only `backend/test/task-045-security-regression-check.js` changed for the implementation, with no product behavior changes beyond regression coverage.
+- Marked TASK-045 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `ccce964 test: TASK-045 security regression coverage`.
+- Changed files inspected: `backend/test/task-045-security-regression-check.js`.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Backend build: `npm --prefix backend run build` passed.
+- Prisma validate: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Focused regression: `node backend/test/task-045-security-regression-check.js` returned `TASK_045_SECURITY_REGRESSION_CHECK=PASS`.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-045` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-045`.
