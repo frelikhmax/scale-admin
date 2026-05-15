@@ -2,16 +2,17 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: scale-admin-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: scale_admin
-      POSTGRES_USER: scale_admin
-      POSTGRES_PASSWORD: scale_admin_password
+      POSTGRES_DB: ${POSTGRES_DB:-scale_admin}
+      POSTGRES_USER: ${POSTGRES_USER:-scale_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scale_admin_password}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U scale_admin -d scale_admin"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -20,13 +21,28 @@ services:
     build:
       context: ./backend
     container_name: scale-admin-backend
+    restart: unless-stopped
     environment:
-      NODE_ENV: development
-      PORT: 3000
-      DATABASE_URL: postgresql://scale_admin:scale_admin_password@postgres:5432/scale_admin
-      FRONTEND_ORIGIN: http://localhost:5173
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: ${PORT:-3000}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://scale_admin:scale_admin_password@postgres:5432/scale_admin}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-scale_admin_session}
+      SESSION_IDLE_TIMEOUT_MINUTES: ${SESSION_IDLE_TIMEOUT_MINUTES:-30}
+      SESSION_ABSOLUTE_TIMEOUT_DAYS: ${SESSION_ABSOLUTE_TIMEOUT_DAYS:-14}
+      CSRF_COOKIE_NAME: ${CSRF_COOKIE_NAME:-scale_admin_csrf}
+      CSRF_HEADER_NAME: ${CSRF_HEADER_NAME:-x-csrf-token}
+      AUTH_RATE_LIMIT_WINDOW_SECONDS: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}
+      AUTH_LOGIN_RATE_LIMIT_MAX: ${AUTH_LOGIN_RATE_LIMIT_MAX:-5}
+      AUTH_ACTION_RATE_LIMIT_MAX: ${AUTH_ACTION_RATE_LIMIT_MAX:-10}
+      AUTH_FAILED_LOGIN_MAX_ATTEMPTS: ${AUTH_FAILED_LOGIN_MAX_ATTEMPTS:-5}
+      AUTH_FAILED_LOGIN_LOCK_MINUTES: ${AUTH_FAILED_LOGIN_LOCK_MINUTES:-15}
+      PASSWORD_RESET_TOKEN_TTL_MINUTES: ${PASSWORD_RESET_TOKEN_TTL_MINUTES:-60}
+      FILE_UPLOAD_DIR: ${FILE_UPLOAD_DIR:-/app/uploads}
     ports:
       - "3000:3000"
+    volumes:
+      - scale_admin_uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,10 +51,11 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE_URL: http://localhost:3000
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000}
     container_name: scale-admin-frontend
+    restart: unless-stopped
     environment:
-      VITE_API_BASE_URL: http://localhost:3000
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000}
     ports:
       - "5173:5173"
     depends_on:
@@ -46,3 +63,4 @@ services:
 
 volumes:
   postgres_data:
+  scale_admin_uploads:

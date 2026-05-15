@@ -85,6 +85,18 @@ npx prisma validate
 Docker verification:
 
 scripts/openclaw-docker-verify.sh TASK-XXX
+
+## MVP deployment notes
+
+Production-oriented Compose and deployment guidance is documented in `docs/deployment.md`.
+
+Before important changes, create both backups:
+
+- PostgreSQL custom dump with `pg_dump` from the `postgres` Compose service.
+- Uploaded-file copy/backup from the backend `/app/uploads` volume.
+
+Production deployments must run behind HTTPS using a reverse proxy or another explicit external TLS layer. This is required for secure cookie behavior and authenticated admin sessions.
+
 OpenClaw workflow
 
 This project uses OpenClaw agents:
