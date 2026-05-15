@@ -1223,3 +1223,27 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-038`.
+
+## 2026-05-15 09:39:11Z — TASK-039 — Scale ACK current version
+
+Status: done
+Owner: backend
+Summary:
+- Implemented authenticated POST /api/scales/ack using the existing Scale API guards and rate limiting.
+- success ACK validates the catalog version belongs to the device store, updates ScaleDevice.currentCatalogVersionId and lastSyncAt, writes ScaleSyncLog ack_received, and writes AuditLog with actorUserId null.
+- error ACK writes ScaleSyncLog error with sanitized errorMessage and does not update currentCatalogVersionId or lastSyncAt.
+- Marked TASK-039 status as done after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: f33f6f8 TASK-039 implement scale ack endpoint.
+- Backend build: cd backend && npm run build passed.
+- Prisma validation: cd backend && npx prisma validate --schema prisma/schema.prisma passed.
+- Focused ACK check: cd backend && node test/scale-ack-check.js returned SCALE_ACK_CHECK=PASS.
+- Docker verification: scripts/openclaw-docker-verify.sh TASK-039 returned DOCKER_VERIFY_RESULT=PASS.
+
+Notes:
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime .openclaw/locks/, .openclaw/handoffs/, and .openclaw/runtime-audit/ artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run scripts/openclaw-after-task-check.sh TASK-039.
