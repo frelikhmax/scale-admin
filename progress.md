@@ -1298,3 +1298,33 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run scripts/openclaw-after-task-check.sh TASK-041.
+
+## 2026-05-15T12:15:31+02:00 — TASK-015 — Users & Access UI
+
+Status: done
+Owner: frontend
+Summary:
+- Frontend implemented admin-only Users & Access UI in commit `65fd707 TASK-015 Users and Access UI`.
+- Added invite creation with CSRF-protected requests.
+- Added user list with role changes and block/unblock controls.
+- Added operator store access assignment and revoke controls.
+- Operators do not see Users & Access navigation; direct `#users-access` opening shows access denied instead of admin controls.
+- Manager inspected handoff, lock, audit, branch state and changed files; changes are scoped to TASK-015 frontend files.
+- Marked TASK-015 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `65fd707 TASK-015 Users and Access UI`.
+- Changed files inspected: `frontend/src/features/users/usersApi.ts`, `frontend/src/main.tsx`, `frontend/src/shared/api/backendApi.ts`, `frontend/src/styles.css`.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Frontend build: `npm --prefix frontend run build` passed.
+- Explicit typecheck: `cd frontend && npm exec tsc -- -b` passed.
+- Focused source check: `TASK_015_SOURCE_CHECK=PASS`.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-015` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime .openclaw/locks/, .openclaw/handoffs/, and .openclaw/runtime-audit/ artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-015`.
