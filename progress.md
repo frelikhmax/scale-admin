@@ -1060,3 +1060,31 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main` and the task branch, then run `scripts/openclaw-after-task-check.sh TASK-029`.
+
+## 2026-05-15 09:43 — TASK-031 — AdvertisingBanner CRUD API
+
+Status: done
+Owner: backend
+Summary:
+- Added protected store-scoped AdvertisingBanner backend API for list/create/get/update, status changes and reorder.
+- Enforced session, RBAC and store-access guards on `stores/:storeId/advertising/banners` routes.
+- Validated required `imageUrl`, supported `active`/`inactive`/`archived` statuses, and non-negative integer `sortOrder`.
+- Persisted sort order and wrote AuditLog entries for create/update/status/reorder operations.
+- Manager verified implementation scope, backend build, Prisma validation, whitespace check, and Docker verification.
+- Marked TASK-031 `status` as `done` after verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `df067ae TASK-031 implement advertising banner CRUD`.
+- Changed implementation files: `backend/src/advertising/advertising.controller.ts`, `backend/src/advertising/advertising.module.ts`, `backend/src/advertising/advertising.service.ts`.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validation: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Developer focused verification passed for create with imageUrl, missing imageUrl validation, active reorder persistence, status transitions, 403 store access denial, and AuditLog writes.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-031` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/` and `.openclaw/handoffs/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to `main`, push `main` and the task branch, then run `scripts/openclaw-after-task-check.sh TASK-031`.
