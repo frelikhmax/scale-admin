@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { CategoryStatus, Prisma } from '@prisma/client';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { CategoryStatus, PlacementStatus, Prisma, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type RequestContext = {
@@ -28,6 +28,34 @@ export type ReorderCategoriesInput = {
   categoryIds: string[];
 };
 
+export type ListPlacementsInput = {
+  categoryId?: string;
+  status?: string;
+};
+
+export type CreatePlacementInput = {
+  categoryId: string;
+  productId: string;
+  sortOrder?: number;
+  status?: string;
+};
+
+export type UpdatePlacementInput = {
+  categoryId?: string;
+  sortOrder?: number;
+  status?: string;
+};
+
+export type MovePlacementInput = {
+  categoryId: string;
+  sortOrder?: number;
+};
+
+export type ReorderPlacementsInput = {
+  categoryId: string;
+  placementIds: string[];
+};
+
 type ActiveCatalogRecord = {
   id: string;
   storeId: string;
@@ -45,6 +73,32 @@ type CategoryRecord = {
   status: CategoryStatus;
   createdAt: Date;
   updatedAt: Date;
+};
+
+type ProductRecord = {
+  id: string;
+  defaultPluCode: string;
+  name: string;
+  shortName: string;
+  status: ProductStatus;
+};
+
+type PlacementRecord = {
+  id: string;
+  catalogId: string;
+  categoryId: string;
+  productId: string;
+  sortOrder: number;
+  status: PlacementStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  category?: {
+    id: string;
+    name: string;
+    shortName: string;
+    status: CategoryStatus;
+  };
+  product?: ProductRecord;
 };
 
 type CategoryTreeNode = ReturnType<CatalogService['toCategoryResponse']> & { children: CategoryTreeNode[] };
@@ -257,6 +311,227 @@ export class CatalogService {
     return { categories: updatedCategories.map((category) => this.toCategoryResponse(category)) };
   }
 
+
+  async listPlacements(storeId: string, input: ListPlacementsInput) {
+    const catalog = await this.findActiveCatalog(storeId);
+    const categoryId = this.normalizeOptionalId(input.categoryId);
+    const status = input.status ? this.requirePlacementStatus(input.status) : undefined;
+
+    if (categoryId) {
+      await this.findCategoryInCatalog(catalog.id, categoryId, 'Category not found in active catalog');
+    }
+
+    const placements = await this.prisma.catalogProductPlacement.findMany({
+      where: {
+        catalogId: catalog.id,
+        ...(categoryId ? { categoryId } : {}),
+        ...(status ? { status } : {}),
+      },
+      include: {
+        category: { select: { id: true, name: true, shortName: true, status: true } },
+        product: { select: { id: true, defaultPluCode: true, name: true, shortName: true, status: true } },
+      },
+      orderBy: [{ categoryId: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return {
+      catalog: this.toCatalogResponse(catalog),
+      placements: placements.map((placement) => this.toPlacementResponse(placement)),
+    };
+  }
+
+  async createPlacement(storeId: string, input: CreatePlacementInput, actorUserId: string, context: RequestContext) {
+    const catalog = await this.findActiveCatalog(storeId);
+    const category = await this.findCategoryInCatalog(catalog.id, input.categoryId, 'Category not found in active catalog');
+    const product = await this.findProductById(input.productId);
+    const status = this.requirePlacementStatus(input.status ?? 'active');
+    this.assertActivePlacementAllowed(status, category, product);
+
+    const existingActivePlacement =
+      status === 'active' ? await this.findActivePlacementForProduct(catalog.id, product.id) : null;
+    if (existingActivePlacement) {
+      throw new ConflictException({
+        message: 'Product already has an active placement in this catalog; move the existing placement instead',
+        code: 'ACTIVE_PLACEMENT_EXISTS',
+        moveRequired: true,
+        existingPlacement: this.toPlacementResponse(existingActivePlacement),
+      });
+    }
+
+    const data: Prisma.CatalogProductPlacementUncheckedCreateInput = {
+      catalogId: catalog.id,
+      categoryId: category.id,
+      productId: product.id,
+      sortOrder: this.requireSortOrder(input.sortOrder ?? 0),
+      status,
+    };
+
+    const placement = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.catalogProductPlacement.create({ data });
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action: 'placement.created',
+          entityType: 'CatalogProductPlacement',
+          entityId: created.id,
+          storeId: catalog.storeId,
+          afterData: this.toPlacementAuditData(created),
+          metadata: { catalogId: catalog.id, categoryId: category.id, productId: product.id },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+      return created;
+    });
+
+    return { placement: this.toPlacementResponse(placement) };
+  }
+
+  async getPlacement(storeId: string, placementId: string) {
+    const catalog = await this.findActiveCatalog(storeId);
+    const placement = await this.findPlacementInCatalog(catalog.id, placementId);
+    return { placement: this.toPlacementResponse(placement) };
+  }
+
+  async updatePlacement(
+    storeId: string,
+    placementId: string,
+    input: UpdatePlacementInput,
+    actorUserId: string,
+    context: RequestContext,
+  ) {
+    const catalog = await this.findActiveCatalog(storeId);
+    const placement = await this.findPlacementInCatalog(catalog.id, placementId);
+    const data: Prisma.CatalogProductPlacementUncheckedUpdateInput = {};
+    let action = 'placement.updated';
+
+    const nextStatus = input.status ? this.requirePlacementStatus(input.status) : placement.status;
+    let nextCategory = placement.category ?? (await this.findCategoryInCatalog(catalog.id, placement.categoryId, 'Category not found in active catalog'));
+    const product = placement.product ?? (await this.findProductById(placement.productId));
+
+    if (input.categoryId !== undefined) {
+      nextCategory = await this.findCategoryInCatalog(catalog.id, input.categoryId, 'Category not found in active catalog');
+      data.categoryId = nextCategory.id;
+      action = 'placement.moved';
+    }
+    if (input.sortOrder !== undefined) {
+      data.sortOrder = this.requireSortOrder(input.sortOrder);
+      if (action === 'placement.updated') {
+        action = 'placement.reordered';
+      }
+    }
+    if (input.status !== undefined) {
+      data.status = nextStatus;
+      action = nextStatus === 'archived' ? 'placement.archived' : 'placement.status_changed';
+    }
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('At least one placement field is required');
+    }
+
+    this.assertActivePlacementAllowed(nextStatus, nextCategory, product);
+    if (nextStatus === 'active') {
+      const existingActivePlacement = await this.findActivePlacementForProduct(catalog.id, product.id, placement.id);
+      if (existingActivePlacement) {
+        throw new ConflictException({
+          message: 'Product already has another active placement in this catalog',
+          code: 'ACTIVE_PLACEMENT_EXISTS',
+          moveRequired: true,
+          existingPlacement: this.toPlacementResponse(existingActivePlacement),
+        });
+      }
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.catalogProductPlacement.update({ where: { id: placement.id }, data });
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action,
+          entityType: 'CatalogProductPlacement',
+          entityId: placement.id,
+          storeId: catalog.storeId,
+          beforeData: this.toPlacementAuditData(placement),
+          afterData: this.toPlacementAuditData(result),
+          metadata: { catalogId: catalog.id, productId: placement.productId },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+      return result;
+    });
+
+    return { placement: this.toPlacementResponse(updated) };
+  }
+
+  async movePlacement(
+    storeId: string,
+    placementId: string,
+    input: MovePlacementInput,
+    actorUserId: string,
+    context: RequestContext,
+  ) {
+    return this.updatePlacement(storeId, placementId, { categoryId: input.categoryId, sortOrder: input.sortOrder }, actorUserId, context);
+  }
+
+  async reorderPlacements(storeId: string, input: ReorderPlacementsInput, actorUserId: string, context: RequestContext) {
+    const catalog = await this.findActiveCatalog(storeId);
+    const category = await this.findCategoryInCatalog(catalog.id, input.categoryId, 'Category not found in active catalog');
+    const placementIds = input.placementIds.map((id) => this.normalizeRequiredId(id, 'Placement id is required'));
+    if (placementIds.length === 0) {
+      throw new BadRequestException('placementIds must contain at least one placement id');
+    }
+    if (new Set(placementIds).size !== placementIds.length) {
+      throw new BadRequestException('placementIds cannot contain duplicates');
+    }
+
+    const placements = await this.prisma.catalogProductPlacement.findMany({
+      where: { catalogId: catalog.id, categoryId: category.id, id: { in: placementIds } },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+    if (placements.length !== placementIds.length) {
+      throw new BadRequestException('All reordered placements must exist in the same catalog and category');
+    }
+
+    const beforeData = placements.map((placement) => this.toPlacementAuditData(placement));
+    const orderById = new Map(placementIds.map((id, index) => [id, index]));
+
+    const updatedPlacements = await this.prisma.$transaction(async (tx) => {
+      await Promise.all(
+        placementIds.map((id, index) =>
+          tx.catalogProductPlacement.update({
+            where: { id },
+            data: { sortOrder: index },
+          }),
+        ),
+      );
+
+      const updated = await tx.catalogProductPlacement.findMany({
+        where: { catalogId: catalog.id, categoryId: category.id, id: { in: placementIds } },
+      });
+      updated.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action: 'placement.reordered',
+          entityType: 'CatalogProductPlacement',
+          entityId: category.id,
+          storeId: catalog.storeId,
+          beforeData,
+          afterData: updated.map((placement) => this.toPlacementAuditData(placement)),
+          metadata: { catalogId: catalog.id, categoryId: category.id, placementIds },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+
+      return updated;
+    });
+
+    return { placements: updatedPlacements.map((placement) => this.toPlacementResponse(placement)) };
+  }
+
   private async findActiveCatalog(storeId: string): Promise<ActiveCatalogRecord> {
     const normalizedStoreId = this.normalizeRequiredId(storeId, 'Store id is required');
     const catalog = await this.prisma.storeCatalog.findFirst({
@@ -359,6 +634,65 @@ export class CatalogService {
     return false;
   }
 
+
+  private async findProductById(productId: string): Promise<ProductRecord> {
+    const normalizedProductId = this.normalizeRequiredId(productId, 'Product id is required');
+    const product = await this.prisma.product.findUnique({
+      where: { id: normalizedProductId },
+      select: { id: true, defaultPluCode: true, name: true, shortName: true, status: true },
+    });
+
+    if (!product) {
+      throw new BadRequestException('Product not found');
+    }
+
+    return product;
+  }
+
+  private async findPlacementInCatalog(catalogId: string, placementId: string): Promise<PlacementRecord> {
+    const normalizedPlacementId = this.normalizeRequiredId(placementId, 'Placement id is required');
+    const placement = await this.prisma.catalogProductPlacement.findFirst({
+      where: { id: normalizedPlacementId, catalogId },
+      include: {
+        category: { select: { id: true, name: true, shortName: true, status: true } },
+        product: { select: { id: true, defaultPluCode: true, name: true, shortName: true, status: true } },
+      },
+    });
+
+    if (!placement) {
+      throw new NotFoundException('Placement not found in active catalog');
+    }
+
+    return placement;
+  }
+
+  private findActivePlacementForProduct(catalogId: string, productId: string, excludePlacementId?: string): Promise<PlacementRecord | null> {
+    return this.prisma.catalogProductPlacement.findFirst({
+      where: {
+        catalogId,
+        productId,
+        status: 'active',
+        ...(excludePlacementId ? { id: { not: excludePlacementId } } : {}),
+      },
+      include: {
+        category: { select: { id: true, name: true, shortName: true, status: true } },
+        product: { select: { id: true, defaultPluCode: true, name: true, shortName: true, status: true } },
+      },
+    });
+  }
+
+  private assertActivePlacementAllowed(status: PlacementStatus, category: { status: CategoryStatus }, product: { status: ProductStatus }) {
+    if (status !== 'active') {
+      return;
+    }
+    if (product.status !== 'active') {
+      throw new BadRequestException('Archived or inactive product cannot be used for an active placement');
+    }
+    if (category.status !== 'active') {
+      throw new BadRequestException('Archived or inactive category cannot be used for an active placement');
+    }
+  }
+
   private buildCategoryTree(categories: CategoryRecord[]): CategoryTreeNode[] {
     const nodes = new Map<string, CategoryTreeNode>();
     for (const category of categories) {
@@ -421,6 +755,15 @@ export class CatalogService {
     return normalizedValue as CategoryStatus;
   }
 
+  private requirePlacementStatus(status: string): PlacementStatus {
+    const normalizedValue = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    if (!['active', 'inactive', 'archived'].includes(normalizedValue)) {
+      throw new BadRequestException('Placement status must be active, inactive, or archived');
+    }
+
+    return normalizedValue as PlacementStatus;
+  }
+
   private normalizeOptionalId(value: string | null | undefined): string | null {
     if (value === null) {
       return null;
@@ -477,6 +820,47 @@ export class CatalogService {
       sortOrder: category.sortOrder,
       status: category.status,
       canAcceptActivePlacements: this.canAcceptActivePlacements(category),
+    };
+  }
+
+  private toPlacementResponse(placement: PlacementRecord) {
+    return {
+      id: placement.id,
+      catalogId: placement.catalogId,
+      categoryId: placement.categoryId,
+      productId: placement.productId,
+      sortOrder: placement.sortOrder,
+      status: placement.status,
+      category: placement.category
+        ? {
+            id: placement.category.id,
+            name: placement.category.name,
+            shortName: placement.category.shortName,
+            status: placement.category.status,
+          }
+        : undefined,
+      product: placement.product
+        ? {
+            id: placement.product.id,
+            defaultPluCode: placement.product.defaultPluCode,
+            name: placement.product.name,
+            shortName: placement.product.shortName,
+            status: placement.product.status,
+          }
+        : undefined,
+      createdAt: placement.createdAt.toISOString(),
+      updatedAt: placement.updatedAt.toISOString(),
+    };
+  }
+
+  private toPlacementAuditData(placement: PlacementRecord) {
+    return {
+      id: placement.id,
+      catalogId: placement.catalogId,
+      categoryId: placement.categoryId,
+      productId: placement.productId,
+      sortOrder: placement.sortOrder,
+      status: placement.status,
     };
   }
 }

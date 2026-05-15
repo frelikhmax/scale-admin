@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { getHeader } from '../auth/cookie.util';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RequireRoles } from '../auth/roles.decorator';
@@ -22,19 +22,36 @@ type ReorderCategoriesBody = {
   categoryIds?: unknown;
 };
 
-@Controller('stores/:storeId/catalog/categories')
+type PlacementBody = {
+  categoryId?: unknown;
+  productId?: unknown;
+  sortOrder?: unknown;
+  status?: unknown;
+};
+
+type PlacementQuery = {
+  categoryId?: string;
+  status?: string;
+};
+
+type ReorderPlacementsBody = {
+  categoryId?: unknown;
+  placementIds?: unknown;
+};
+
+@Controller('stores/:storeId/catalog')
 @UseGuards(SessionGuard, RolesGuard, StoreAccessGuard)
 @RequireRoles('admin', 'operator')
 @RequireStoreAccess('storeId', 'params')
 export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
 
-  @Get()
+  @Get('categories')
   listCategoryTree(@Param('storeId') storeId: string) {
     return this.catalogService.listCategoryTree(storeId);
   }
 
-  @Post()
+  @Post('categories')
   createCategory(
     @Param('storeId') storeId: string,
     @Body() body: CategoryBody,
@@ -55,7 +72,7 @@ export class CatalogController {
     );
   }
 
-  @Patch(':categoryId')
+  @Patch('categories/:categoryId')
   updateCategory(
     @Param('storeId') storeId: string,
     @Param('categoryId') categoryId: string,
@@ -78,7 +95,7 @@ export class CatalogController {
     );
   }
 
-  @Post('reorder')
+  @Post('categories/reorder')
   reorderCategories(
     @Param('storeId') storeId: string,
     @Body() body: ReorderCategoriesBody,
@@ -90,6 +107,99 @@ export class CatalogController {
       {
         parentId: body.parentId === null ? null : this.optionalString(body.parentId),
         categoryIds: Array.isArray(body.categoryIds) ? body.categoryIds.map((value) => String(value)) : [],
+      },
+      user.id,
+      this.getRequestContext(request),
+    );
+  }
+
+
+  @Get('placements')
+  listPlacements(@Param('storeId') storeId: string, @Query() query: PlacementQuery) {
+    return this.catalogService.listPlacements(storeId, {
+      categoryId: query.categoryId,
+      status: query.status,
+    });
+  }
+
+  @Post('placements')
+  createPlacement(
+    @Param('storeId') storeId: string,
+    @Body() body: PlacementBody,
+    @Req() request: any,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.catalogService.createPlacement(
+      storeId,
+      {
+        categoryId: String(body.categoryId ?? ''),
+        productId: String(body.productId ?? ''),
+        sortOrder: this.optionalNumber(body.sortOrder),
+        status: typeof body.status === 'string' ? body.status : undefined,
+      },
+      user.id,
+      this.getRequestContext(request),
+    );
+  }
+
+  @Post('placements/reorder')
+  reorderPlacements(
+    @Param('storeId') storeId: string,
+    @Body() body: ReorderPlacementsBody,
+    @Req() request: any,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.catalogService.reorderPlacements(
+      storeId,
+      {
+        categoryId: String(body.categoryId ?? ''),
+        placementIds: Array.isArray(body.placementIds) ? body.placementIds.map((value) => String(value)) : [],
+      },
+      user.id,
+      this.getRequestContext(request),
+    );
+  }
+
+  @Get('placements/:placementId')
+  getPlacement(@Param('storeId') storeId: string, @Param('placementId') placementId: string) {
+    return this.catalogService.getPlacement(storeId, placementId);
+  }
+
+  @Patch('placements/:placementId')
+  updatePlacement(
+    @Param('storeId') storeId: string,
+    @Param('placementId') placementId: string,
+    @Body() body: PlacementBody,
+    @Req() request: any,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.catalogService.updatePlacement(
+      storeId,
+      placementId,
+      {
+        categoryId: typeof body.categoryId === 'string' ? body.categoryId : undefined,
+        sortOrder: this.optionalNumber(body.sortOrder),
+        status: typeof body.status === 'string' ? body.status : undefined,
+      },
+      user.id,
+      this.getRequestContext(request),
+    );
+  }
+
+  @Post('placements/:placementId/move')
+  movePlacement(
+    @Param('storeId') storeId: string,
+    @Param('placementId') placementId: string,
+    @Body() body: PlacementBody,
+    @Req() request: any,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.catalogService.movePlacement(
+      storeId,
+      placementId,
+      {
+        categoryId: String(body.categoryId ?? ''),
+        sortOrder: this.optionalNumber(body.sortOrder),
       },
       user.id,
       this.getRequestContext(request),
