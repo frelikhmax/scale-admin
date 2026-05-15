@@ -1114,3 +1114,30 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-033`.
+
+## 2026-05-15 10:06 — TASK-034 — packageData snapshot generation
+
+Status: done
+Owner: backend
+Summary:
+- Added read-only backend CatalogPackageService for active catalog package generation.
+- Generated deterministic packageData snapshots from active catalog categories, active placements/products, active positive prices and active advertising banners.
+- Added SHA-256 packageChecksum over stable canonical JSON package content.
+- Exposed guarded package generation endpoints for GET/POST `stores/:storeId/publishing/catalog-package`.
+- Confirmed TASK-035 scope was not implemented: no CatalogVersion creation and no StoreCatalog.currentVersionId update.
+- Marked TASK-034 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `b92d1aa TASK-034 implement catalog package generation`.
+- Changed implementation files: `backend/src/publishing/catalog-package.service.ts`, `backend/src/publishing/publishing.controller.ts`, `backend/src/publishing/publishing.module.ts`.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validation: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Focused manager verification confirmed active-only data selection, package shape, deterministic sort comparators, stable checksum, no CatalogVersion mutation and no StoreCatalog update.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-034` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/` and `.openclaw/handoffs/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-034`.
