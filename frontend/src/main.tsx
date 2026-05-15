@@ -33,6 +33,13 @@ import {
 } from './features/catalog/catalogApi';
 import { useGetHealthQuery } from './features/health/healthApi';
 import {
+  useListGlobalLogsQuery,
+  useListStoreLogsQuery,
+  type AuditLogEntry,
+  type LogsFilters,
+  type ScaleSyncLogEntry,
+} from './features/logs/logsApi';
+import {
   useListStorePricesQuery,
   useUpdateStoreProductPriceMutation,
   type PriceRow,
@@ -97,7 +104,8 @@ type DashboardView =
   | { name: 'products' }
   | { name: 'product-create' }
   | { name: 'product-edit'; productId: string }
-  | { name: 'users-access' };
+  | { name: 'users-access' }
+  | { name: 'global-logs' };
 
 function HealthStatus() {
   const { data: health, error, isLoading, isFetching, refetch } = useGetHealthQuery();
@@ -255,6 +263,13 @@ function Navigation({ user, activeView, onNavigate }: { user: AuthUser; activeVi
             Create store
           </button>
           <button
+            className={activeView.name === 'global-logs' ? 'nav-button nav-button-active' : 'nav-button'}
+            type="button"
+            onClick={() => onNavigate({ name: 'global-logs' })}
+          >
+            Global Logs
+          </button>
+          <button
             className={activeView.name === 'users-access' ? 'nav-button nav-button-active' : 'nav-button'}
             type="button"
             onClick={() => onNavigate({ name: 'users-access' })}
@@ -330,6 +345,171 @@ function StoresList({ user, onNavigate }: { user: AuthUser; onNavigate: (view: D
   );
 }
 
+const scaleSyncStatuses: Array<ScaleSyncLogEntry['status']> = ['no_update', 'update_available', 'package_delivered', 'ack_received', 'auth_failed', 'error'];
+
+function LogsFiltersForm({
+  filters,
+  onChange,
+  stores,
+  showStoreFilter,
+}: {
+  filters: LogsFilters;
+  onChange: (filters: LogsFilters) => void;
+  stores?: Store[];
+  showStoreFilter?: boolean;
+}) {
+  function setFilter(key: keyof LogsFilters, value: string) {
+    onChange({ ...filters, [key]: value || undefined });
+  }
+
+  return (
+    <div className="logs-filters" aria-label="Logs filters">
+      {showStoreFilter && (
+        <label>
+          Store
+          <select value={filters.storeId ?? ''} onChange={(event) => setFilter('storeId', event.target.value)}>
+            <option value="">All stores</option>
+            {(stores ?? []).map((store) => <option key={store.id} value={store.id}>{store.code} · {store.name}</option>)}
+          </select>
+        </label>
+      )}
+      <label>
+        Entity type
+        <input value={filters.entityType ?? ''} onChange={(event) => setFilter('entityType', event.target.value)} placeholder="product, store, scale_device…" />
+      </label>
+      <label>
+        Action / audit status
+        <input value={filters.action ?? ''} onChange={(event) => setFilter('action', event.target.value)} placeholder="created, updated, login…" />
+      </label>
+      <label>
+        Sync status
+        <select value={filters.status ?? ''} onChange={(event) => setFilter('status', event.target.value)}>
+          <option value="">Any sync status</option>
+          {scaleSyncStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+        </select>
+      </label>
+      <label>
+        From date
+        <input type="date" value={filters.dateFrom ?? ''} onChange={(event) => setFilter('dateFrom', event.target.value)} />
+      </label>
+      <label>
+        To date
+        <input type="date" value={filters.dateTo ?? ''} onChange={(event) => setFilter('dateTo', event.target.value)} />
+      </label>
+      <button className="secondary-button" type="button" onClick={() => onChange({})}>Clear filters</button>
+    </div>
+  );
+}
+
+function LogsTables({ auditLogs, scaleSyncLogs }: { auditLogs: AuditLogEntry[]; scaleSyncLogs: ScaleSyncLogEntry[] }) {
+  return (
+    <div className="logs-grid">
+      <section className="logs-card" aria-labelledby="audit-logs-title">
+        <h4 id="audit-logs-title">AuditLog entries</h4>
+        {auditLogs.length === 0 ? <div className="empty-state">No audit logs for the selected filters.</div> : (
+          <div className="logs-table-wrap">
+            <table className="logs-table">
+              <thead>
+                <tr><th>Time</th><th>Store</th><th>Actor</th><th>Entity</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                {auditLogs.map((log) => (
+                  <tr key={log.id}>
+                    <td>{formatDateTime(log.createdAt)}</td>
+                    <td>{log.store ? `${log.store.code} · ${log.store.name}` : 'Global'}</td>
+                    <td>{log.actor ? (log.actor.fullName || log.actor.email) : 'System'}</td>
+                    <td><strong>{log.entityType}</strong>{log.entityId ? <span className="muted block">{log.entityId}</span> : null}</td>
+                    <td><span className="badge badge-neutral">{log.action}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="logs-card" aria-labelledby="sync-logs-title">
+        <h4 id="sync-logs-title">ScaleSyncLog entries</h4>
+        {scaleSyncLogs.length === 0 ? <div className="empty-state">No scale sync logs for the selected filters.</div> : (
+          <div className="logs-table-wrap">
+            <table className="logs-table">
+              <thead>
+                <tr><th>Time</th><th>Store</th><th>Scale</th><th>Status</th><th>Versions / error</th></tr>
+              </thead>
+              <tbody>
+                {scaleSyncLogs.map((log) => (
+                  <tr key={log.id}>
+                    <td>{formatDateTime(log.createdAt)}</td>
+                    <td>{log.store ? `${log.store.code} · ${log.store.name}` : '—'}</td>
+                    <td>{log.scaleDevice ? `${log.scaleDevice.deviceCode} · ${log.scaleDevice.name}` : 'Unknown scale'}</td>
+                    <td><span className={`badge ${log.status === 'error' || log.status === 'auth_failed' ? 'badge-danger' : 'badge-neutral'}`}>{log.status}</span></td>
+                    <td>
+                      <span className="muted block">requested: {log.requestedVersionId ?? '—'}</span>
+                      <span className="muted block">delivered: {log.deliveredVersionId ?? '—'}</span>
+                      {log.errorMessage && <span className="inline-error block">{log.errorMessage}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function GlobalLogsPage({ user }: { user: AuthUser }) {
+  const [filters, setFilters] = useState<LogsFilters>({});
+  const { data: storesData } = useListStoresQuery(undefined, { skip: user.role !== 'admin' });
+  const { data, error, isLoading, isFetching, refetch } = useListGlobalLogsQuery(filters, { skip: user.role !== 'admin' });
+  const errorMessage = error && 'message' in error ? error.message : null;
+
+  if (user.role !== 'admin') {
+    return <AccessDeniedPanel />;
+  }
+
+  return (
+    <section className="panel" aria-labelledby="global-logs-title">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">Admin only</p>
+          <h2 id="global-logs-title">Global Logs</h2>
+          <p className="muted">Read-only AuditLog and ScaleSyncLog activity. Sensitive payload fields are not exposed.</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => refetch()} disabled={isFetching}>{isFetching ? 'Refreshing...' : 'Refresh logs'}</button>
+      </div>
+      <LogsFiltersForm filters={filters} onChange={setFilters} stores={storesData?.stores ?? []} showStoreFilter />
+      {isLoading && <div className="status status-loading">Loading logs...</div>}
+      {errorMessage && <div className="form-error" role="alert">{errorMessage}</div>}
+      {data && <LogsTables auditLogs={data.auditLogs} scaleSyncLogs={data.scaleSyncLogs} />}
+    </section>
+  );
+}
+
+function StoreLogsTab({ storeId }: { storeId: string }) {
+  const [filters, setFilters] = useState<LogsFilters>({});
+  const { data, error, isLoading, isFetching, refetch } = useListStoreLogsQuery({ storeId, filters });
+  const errorMessage = error && 'message' in error ? error.message : null;
+
+  return (
+    <section className="logs-tab" aria-labelledby="store-logs-title">
+      <div className="panel-heading logs-heading">
+        <div>
+          <p className="eyebrow">Store logs</p>
+          <h3 id="store-logs-title">Logs</h3>
+          <p className="muted">Activity scoped to this store. Operators only reach stores assigned to them.</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => refetch()} disabled={isFetching}>{isFetching ? 'Refreshing...' : 'Refresh logs'}</button>
+      </div>
+      <LogsFiltersForm filters={filters} onChange={setFilters} />
+      {isLoading && <div className="status status-loading">Loading store logs...</div>}
+      {errorMessage && <div className="form-error" role="alert">{errorMessage}</div>}
+      {data && <LogsTables auditLogs={data.auditLogs} scaleSyncLogs={data.scaleSyncLogs} />}
+    </section>
+  );
+}
+
 function StoreDetails({ user, storeId, onNavigate }: { user: AuthUser; storeId: string; onNavigate: (view: DashboardView) => void }) {
   const { data, error, isLoading } = useGetStoreQuery(storeId);
   const { data: versionsData, error: versionsError, isLoading: versionsLoading } = useGetCatalogVersionsQuery(storeId);
@@ -375,6 +555,7 @@ function StoreDetails({ user, storeId, onNavigate }: { user: AuthUser; storeId: 
           <ScaleDevicesTab storeId={store.id} userRole={user.role} currentVersionId={currentVersion?.id ?? null} />
           <PricesTab storeId={store.id} />
           <PublishingTab storeId={store.id} userRole={user.role} currentVersion={currentVersion} />
+          <StoreLogsTab storeId={store.id} />
         </>
       )}
     </section>
@@ -2500,6 +2681,10 @@ function OperatorStoreAccess({ userId }: { userId: string }) {
 }
 
 function DashboardContent({ user, view, onNavigate }: { user: AuthUser; view: DashboardView; onNavigate: (view: DashboardView) => void }) {
+  if (view.name === 'global-logs') {
+    return user.role === 'admin' ? <GlobalLogsPage user={user} /> : <AccessDeniedPanel />;
+  }
+
   if (view.name === 'users-access') {
     return user.role === 'admin' ? <UsersAccessPage currentUser={user} /> : <AccessDeniedPanel />;
   }
@@ -2537,6 +2722,7 @@ function DashboardContent({ user, view, onNavigate }: { user: AuthUser; view: Da
 
 function viewFromHash(): DashboardView {
   const hash = window.location.hash;
+  if (hash === '#global-logs') return { name: 'global-logs' };
   if (hash === '#users-access') return { name: 'users-access' };
   if (hash === '#products') return { name: 'products' };
   if (hash === '#product-create') return { name: 'product-create' };
@@ -2545,6 +2731,7 @@ function viewFromHash(): DashboardView {
 }
 
 function hashFromView(view: DashboardView) {
+  if (view.name === 'global-logs') return '#global-logs';
   if (view.name === 'users-access') return '#users-access';
   if (view.name === 'products') return '#products';
   if (view.name === 'product-create') return '#product-create';

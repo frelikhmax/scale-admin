@@ -1323,3 +1323,83 @@ select:focus {
     grid-template-columns: 1fr;
   }
 }
+
+.logs-tab {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #dce4f3;
+}
+
+.logs-heading h3,
+.logs-card h4 {
+  margin: 0;
+}
+
+.logs-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  align-items: end;
+  margin: 1rem 0;
+}
+
+.logs-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.logs-card {
+  padding: 1rem;
+  border: 1px solid #dce4f3;
+  border-radius: 18px;
+  background: #fbfdff;
+}
+
+.logs-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.75rem;
+  border: 1px solid #dce4f3;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.logs-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+}
+
+.logs-table th,
+.logs-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #e8eef8;
+  text-align: left;
+  vertical-align: top;
+}
+
+.logs-table th {
+  color: #50617f;
+  background: #f8faff;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.logs-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.block {
+  display: block;
+}
+
+.badge-neutral {
+  color: #35415c;
+  background: #eef3fb;
+}
+
+.badge-danger {
+  color: #9f1d2f;
+  background: #ffe8ed;
+}
