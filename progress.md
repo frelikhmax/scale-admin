@@ -875,3 +875,37 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-019`.
+
+## 2026-05-15 03:05 — TASK-021 — Product master catalog CRUD/search/audit
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented TASK-021 in commit `aee7062 feat: add product master CRUD` without marking `tasks.json` done.
+- Added protected Product endpoints for admin/operator list/search, create, get and update.
+- Added required validation for `defaultPluCode`, `name`, `shortName`, `unit` and `status`.
+- Enforced `defaultPluCode` uniqueness with conflict response.
+- Search supports `name`, `shortName`, `defaultPluCode`, `sku` and `barcode`.
+- Archived products are returned with `unavailableForNewActivePlacements=true` for later placement logic.
+- Updating products used by active catalog placements returns `PRODUCT_USED_IN_ACTIVE_CATALOG_PLACEMENTS` warning metadata.
+- Product create/update writes AuditLog entries with before/after data.
+- Manager verified code scope, backend build, Prisma schema, backend-reported API/DB checks and deterministic Docker verification.
+- Marked TASK-021 `status` as `done` after manager verification and Docker verification passed.
+- Released `.openclaw/locks/TASK-021.lock`.
+
+Evidence:
+- Coordination commit: `9bbd0cc chore: assign TASK-021 product master crud`.
+- Implementation commit inspected: `aee7062 feat: add product master CRUD`.
+- Changed files inspected: `backend/src/products/products.controller.ts`, `backend/src/products/products.module.ts`, `backend/src/products/products.service.ts`.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validate: `DATABASE_URL=... npx prisma validate` passed.
+- Whitespace check: `git diff --check 9bbd0cc..HEAD` passed.
+- Backend reported focused API/DB checks: create as admin/operator `201`, missing shortName `400`, duplicate defaultPluCode `409`, search by name/PLU/sku/barcode `200` with matches, archive/update `200`, used-product warning returned, operator update `200`, AuditLog create/update entries present.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-021` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Archived-product placement blocking is exposed as backend Product response semantics for later placement APIs; TASK-021 does not include placement creation endpoints.
+- Used-product confirmation is implemented as a warning-on-update flow, satisfying the warning/confirmation acceptance criterion.
+
+Next:
+- Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-021`.
