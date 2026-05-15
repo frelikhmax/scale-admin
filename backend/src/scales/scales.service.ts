@@ -1,7 +1,7 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { createScaleApiToken, hashScaleApiToken } from './scale-token.util';
+import { createScaleApiToken, hashScaleApiToken, verifyScaleApiTokenHash } from './scale-token.util';
 
 export type RequestContext = {
   ipAddress?: string;
@@ -18,6 +18,18 @@ export type CreateScaleDeviceInput = {
 export type UpdateScaleDeviceStatusInput = {
   status: string;
 };
+
+export type ScaleApiAuthResult =
+  | {
+      authenticated: true;
+      device: {
+        id: string;
+        storeId: string;
+        deviceCode: string;
+        status: string;
+      };
+    }
+  | { authenticated: false };
 
 type ScaleDeviceRecord = {
   id: string;
@@ -167,6 +179,108 @@ export class ScalesService {
       device: this.toDeviceResponse(updatedDevice),
       apiToken,
     };
+  }
+
+  async authenticateScaleApiRequest(deviceCode: string, apiToken: string, context: RequestContext): Promise<ScaleApiAuthResult> {
+    const normalizedDeviceCode = typeof deviceCode === 'string' ? deviceCode.trim().toUpperCase() : '';
+    const submittedToken = typeof apiToken === 'string' ? apiToken : '';
+
+    if (!normalizedDeviceCode || !submittedToken) {
+      await this.writeScaleAuthFailureLog(null, null, 'missing_credentials', context);
+      return { authenticated: false };
+    }
+
+    const device = await this.prisma.scaleDevice.findUnique({ where: { deviceCode: normalizedDeviceCode } });
+    if (!device) {
+      await this.writeScaleAuthFailureLog(null, null, 'invalid_credentials', context);
+      return { authenticated: false };
+    }
+
+    if (!verifyScaleApiTokenHash(submittedToken, device.apiTokenHash)) {
+      await this.writeScaleAuthFailureLog(device.id, device.storeId, 'invalid_credentials', context);
+      return { authenticated: false };
+    }
+
+    if (device.status !== 'active') {
+      await this.writeScaleAuthFailureLog(device.id, device.storeId, `device_${device.status}`, context);
+      throw new ForbiddenException({
+        message: 'Scale device is not allowed to sync',
+        error: 'Forbidden',
+        code: 'SCALE_DEVICE_NOT_ACTIVE',
+        statusCode: 403,
+      });
+    }
+
+    await this.prisma.scaleDevice.update({
+      where: { id: device.id },
+      data: { lastSeenAt: new Date() },
+    });
+
+    return {
+      authenticated: true,
+      device: {
+        id: device.id,
+        storeId: device.storeId,
+        deviceCode: device.deviceCode,
+        status: device.status,
+      },
+    };
+  }
+
+  getScaleApiAuthCheck(device: { id: string; storeId: string; deviceCode: string; status: string }) {
+    return {
+      authenticated: true,
+      device: {
+        id: device.id,
+        storeId: device.storeId,
+        deviceCode: device.deviceCode,
+        status: device.status,
+      },
+    };
+  }
+
+  async getScaleApiNoUpdateResponse(device: { id: string; storeId: string }, currentCatalogVersionId?: string) {
+    const updatedDevice = await this.prisma.scaleDevice.update({
+      where: { id: device.id },
+      data: {
+        lastSeenAt: new Date(),
+        lastSyncAt: new Date(),
+      },
+    });
+
+    await this.prisma.scaleSyncLog.create({
+      data: {
+        scaleDeviceId: device.id,
+        storeId: device.storeId,
+        requestedVersionId: currentCatalogVersionId || null,
+        status: 'no_update',
+        errorMessage: null,
+      },
+    });
+
+    return {
+      status: 'no_update',
+      deviceId: updatedDevice.id,
+      package: null,
+    };
+  }
+
+  private async writeScaleAuthFailureLog(
+    scaleDeviceId: string | null,
+    storeId: string | null,
+    reason: 'missing_credentials' | 'invalid_credentials' | string,
+    context: RequestContext,
+  ) {
+    await this.prisma.scaleSyncLog.create({
+      data: {
+        scaleDeviceId,
+        storeId,
+        status: 'auth_failed',
+        errorMessage: reason,
+        requestIp: context.ipAddress,
+        userAgent: context.userAgent,
+      },
+    });
   }
 
   private async findStoreById(storeId: string) {
