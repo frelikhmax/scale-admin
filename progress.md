@@ -1597,3 +1597,32 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-043`.
+
+## 2026-05-15T15:07:00+02:00 — TASK-044 — Admin Dashboard and Operator Dashboard UI
+
+Status: done
+Owner: frontend (manager-bound subagent)
+Summary:
+- Frontend implemented role-specific dashboard landing pages in commit `40688a6 TASK-044 admin and operator dashboard UI`.
+- Admin dashboard shows store and scale metric cards, devices with errors, devices without synchronization, latest published versions, latest sync errors, problematic scale devices and quick links.
+- Operator dashboard shows only assigned stores through the existing scoped stores API, with current version, publication status, synchronization status, errors and an Open catalog action.
+- Problematic scales/devices are visually highlighted.
+- Added RTK Query dashboard API for `GET /api/admin/dashboard`.
+- Manager inspected changed files and confirmed implementation stayed inside TASK-044 frontend scope.
+- Marked TASK-044 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `40688a6 TASK-044 admin and operator dashboard UI`.
+- Changed files inspected: `frontend/src/features/dashboard/dashboardApi.ts`, `frontend/src/main.tsx`, `frontend/src/styles.css`.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Frontend build: `npm --prefix frontend run build` passed.
+- Frontend typecheck: `cd frontend && npm exec tsc -- -b` passed.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-044` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-044`.
