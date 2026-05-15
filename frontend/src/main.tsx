@@ -21,6 +21,7 @@ import {
   useValidateCatalogMutation,
   type CatalogValidationIssue,
   type CatalogValidationResponse,
+  type CatalogVersionHistoryItem,
   type PublishCatalogResponse,
 } from './features/publishing/publishingApi';
 import {
@@ -286,8 +287,11 @@ function StoresList({ user, onNavigate }: { user: AuthUser; onNavigate: (view: D
 
 function StoreDetails({ user, storeId, onNavigate }: { user: AuthUser; storeId: string; onNavigate: (view: DashboardView) => void }) {
   const { data, error, isLoading } = useGetStoreQuery(storeId);
+  const { data: versionsData, error: versionsError, isLoading: versionsLoading } = useGetCatalogVersionsQuery(storeId);
   const store = data?.store;
+  const currentVersion = versionsData?.currentVersion ?? null;
   const errorMessage = error && 'message' in error ? error.message : null;
+  const versionsErrorMessage = versionsError && 'message' in versionsError ? versionsError.message : null;
 
   return (
     <section className="panel" aria-labelledby="store-details-title">
@@ -296,6 +300,7 @@ function StoreDetails({ user, storeId, onNavigate }: { user: AuthUser; storeId: 
       </button>
       {isLoading && <div className="status status-loading">Loading store details...</div>}
       {errorMessage && <div className="form-error" role="alert">{errorMessage}</div>}
+      {versionsErrorMessage && <div className="form-error" role="alert">{versionsErrorMessage}</div>}
       {store && (
         <>
           <div className="panel-heading">
@@ -316,19 +321,20 @@ function StoreDetails({ user, storeId, onNavigate }: { user: AuthUser; storeId: 
           <dl className="details-grid">
             <div><dt>Address</dt><dd>{store.address || '—'}</dd></div>
             <div><dt>Timezone</dt><dd>{store.timezone}</dd></div>
+            <div><dt>Published catalog</dt><dd>{versionsLoading ? 'Loading…' : formatVersionLabel(currentVersion)}</dd></div>
             <div><dt>Created</dt><dd>{new Date(store.createdAt).toLocaleString()}</dd></div>
             <div><dt>Updated</dt><dd>{new Date(store.updatedAt).toLocaleString()}</dd></div>
           </dl>
-          <ScaleDevicesTab storeId={store.id} userRole={user.role} />
+          <ScaleDevicesTab storeId={store.id} userRole={user.role} currentVersionId={currentVersion?.id ?? null} />
           <PricesTab storeId={store.id} />
-          <PublishingTab storeId={store.id} />
+          <PublishingTab storeId={store.id} userRole={user.role} currentVersion={currentVersion} />
         </>
       )}
     </section>
   );
 }
 
-function ScaleDevicesTab({ storeId, userRole }: { storeId: string; userRole: AuthUser['role'] }) {
+function ScaleDevicesTab({ storeId, userRole, currentVersionId }: { storeId: string; userRole: AuthUser['role']; currentVersionId: string | null }) {
   const isAdmin = userRole === 'admin';
   const { data, error, isLoading, isFetching, refetch } = useListScaleDevicesQuery(storeId);
   const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
@@ -445,7 +451,7 @@ function ScaleDevicesTab({ storeId, userRole }: { storeId: string; userRole: Aut
         <div>
           <p className="eyebrow">Scale Devices</p>
           <h3 id="scale-devices-title">Store scale devices</h3>
-          <p className="muted">{isAdmin ? 'Register devices, block access and rotate API tokens.' : 'Current scale device status for this store.'}</p>
+          <p className="muted">{isAdmin ? 'Register devices, block access and rotate API tokens.' : 'Publication and sync status for this store.'}</p>
         </div>
         <button className="secondary-button" type="button" onClick={() => refetch()} disabled={isFetching}>
           {isFetching ? 'Refreshing...' : 'Refresh devices'}
@@ -493,36 +499,45 @@ function ScaleDevicesTab({ storeId, userRole }: { storeId: string; userRole: Aut
                 {isAdmin && <th>Name</th>}
                 {isAdmin && <th>Model</th>}
                 <th>Status</th>
-                {isAdmin && <th>Last seen</th>}
-                {isAdmin && <th>Last sync</th>}
-                {isAdmin && <th>Catalog version</th>}
+                <th>Last seen</th>
+                <th>Last sync</th>
+                <th>Catalog version</th>
+                <th>Sync status</th>
                 {isAdmin && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
-              {devices.map((device) => (
-                <tr key={device.id}>
-                  <td><code>{device.deviceCode}</code>{!isAdmin && <span className="operator-device-name">{device.name}</span>}</td>
-                  {isAdmin && <td>{device.name}</td>}
-                  {isAdmin && <td>{device.model ?? '—'}</td>}
-                  <td><ScaleDeviceStatusBadge status={device.status} /></td>
-                  {isAdmin && <td>{formatDateTime(device.lastSeenAt)}</td>}
-                  {isAdmin && <td>{formatDateTime(device.lastSyncAt)}</td>}
-                  {isAdmin && <td><code>{device.currentCatalogVersionId ?? '—'}</code></td>}
-                  {isAdmin && (
+              {devices.map((device) => {
+                const isOutdated = Boolean(currentVersionId && device.currentCatalogVersionId !== currentVersionId);
+
+                return (
+                  <tr className={isOutdated ? 'scale-device-outdated' : undefined} key={device.id}>
+                    <td><code>{device.deviceCode}</code>{!isAdmin && <span className="operator-device-name">{device.name}</span>}</td>
+                    {isAdmin && <td>{device.name}</td>}
+                    {isAdmin && <td>{device.model ?? '—'}</td>}
+                    <td><ScaleDeviceStatusBadge status={device.status} /></td>
+                    <td>{formatDateTime(device.lastSeenAt)}</td>
+                    <td>{formatDateTime(device.lastSyncAt)}</td>
                     <td>
-                      <div className="table-actions">
-                        <button className="secondary-button" type="button" onClick={() => handleBlock(device)} disabled={updatingStatus || device.status === 'blocked'}>
-                          {device.status === 'blocked' ? 'Blocked' : 'Block'}
-                        </button>
-                        <button className="secondary-button" type="button" onClick={() => handleRegenerate(device)} disabled={regenerating}>
-                          Regenerate token
-                        </button>
-                      </div>
+                      <code>{device.currentCatalogVersionId ?? '—'}</code>
+                      {isOutdated && <span className="sync-note">Not updated to current version</span>}
                     </td>
-                  )}
-                </tr>
-              ))}
+                    <td><ScaleSyncStatusCell device={device} /></td>
+                    {isAdmin && (
+                      <td>
+                        <div className="table-actions">
+                          <button className="secondary-button" type="button" onClick={() => handleBlock(device)} disabled={updatingStatus || device.status === 'blocked'}>
+                            {device.status === 'blocked' ? 'Blocked' : 'Block'}
+                          </button>
+                          <button className="secondary-button" type="button" onClick={() => handleRegenerate(device)} disabled={regenerating}>
+                            Regenerate token
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -535,6 +550,32 @@ function ScaleDeviceStatusBadge({ status }: { status: ScaleDeviceStatus }) {
   return <span className={`badge badge-${status}`}>{status}</span>;
 }
 
+function ScaleSyncStatusCell({ device }: { device: ScaleDevice }) {
+  if (device.lastSyncError) {
+    return (
+      <div className="sync-status sync-status-error">
+        <span className="badge badge-sync-error">{device.lastSyncError.status}</span>
+        <small>{device.lastSyncError.message || 'Scale reported a synchronization error.'}</small>
+        <small>{formatDateTime(device.lastSyncError.createdAt)}</small>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sync-status">
+      <span className={`badge badge-sync-${device.lastSyncStatus ?? 'unknown'}`}>{device.lastSyncStatus ?? 'no sync yet'}</span>
+    </div>
+  );
+}
+
+function formatVersionLabel(version: CatalogVersionHistoryItem | null | undefined) {
+  if (!version) {
+    return 'No published version';
+  }
+
+  return `v${version.versionNumber} (${version.id})`;
+}
+
 function formatDateTime(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : '—';
 }
@@ -543,7 +584,7 @@ function shortChecksum(value: string | null | undefined) {
   return value ? `${value.slice(0, 12)}…` : '—';
 }
 
-function PublishingTab({ storeId }: { storeId: string }) {
+function PublishingTab({ storeId, userRole, currentVersion }: { storeId: string; userRole: AuthUser['role']; currentVersion: CatalogVersionHistoryItem | null }) {
   const { data: versionsData, error: versionsError, isLoading: versionsLoading, isFetching: versionsFetching, refetch } = useGetCatalogVersionsQuery(storeId);
   const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
   const [validateCatalog, { isLoading: validating }] = useValidateCatalogMutation();
@@ -551,7 +592,9 @@ function PublishingTab({ storeId }: { storeId: string }) {
   const [validation, setValidation] = useState<CatalogValidationResponse | null>(null);
   const [lastPublished, setLastPublished] = useState<PublishCatalogResponse['version'] | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const isAdmin = userRole === 'admin';
   const versions = versionsData?.versions ?? [];
+  const displayedCurrentVersion = versionsData?.currentVersion ?? currentVersion;
   const versionsErrorMessage = versionsError && 'message' in versionsError ? versionsError.message : null;
   const hasBlockingErrors = Boolean(validation && validation.blockingErrors.length > 0);
   const canPublish = Boolean(validation?.canPublish) && !hasBlockingErrors;
@@ -617,14 +660,22 @@ function PublishingTab({ storeId }: { storeId: string }) {
           <h3 id="publishing-title">Validate and publish catalog versions</h3>
           <p className="muted">After a catalog is published, later changes require a new validation and a new version.</p>
         </div>
-        <div className="action-row">
-          <button className="secondary-button" type="button" onClick={handleValidate} disabled={validating || publishing}>
-            {validating ? 'Validating...' : 'Run validation'}
-          </button>
-          <button type="button" onClick={handlePublish} disabled={publishing || validating || !canPublish}>
-            {publishing ? 'Publishing...' : 'Publish catalog'}
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="action-row">
+            <button className="secondary-button" type="button" onClick={handleValidate} disabled={validating || publishing}>
+              {validating ? 'Validating...' : 'Run validation'}
+            </button>
+            <button type="button" onClick={handlePublish} disabled={publishing || validating || !canPublish}>
+              {publishing ? 'Publishing...' : 'Publish catalog'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="publication-status-card">
+        <strong>Current published catalog</strong>
+        <span>{formatVersionLabel(displayedCurrentVersion)}</span>
+        {displayedCurrentVersion?.publishedAt && <small>Published at {formatDateTime(displayedCurrentVersion.publishedAt)}</small>}
       </div>
 
       {actionError && <div className="form-error" role="alert">{actionError}</div>}
@@ -634,7 +685,7 @@ function PublishingTab({ storeId }: { storeId: string }) {
         </div>
       )}
 
-      {validation ? (
+      {isAdmin && validation ? (
         <div className="validation-grid">
           <div className={`validation-summary ${validation.canPublish ? 'validation-summary-ok' : 'validation-summary-blocked'}`}>
             <strong>{validation.canPublish ? 'Ready to publish' : 'Publication blocked'}</strong>
@@ -644,8 +695,10 @@ function PublishingTab({ storeId }: { storeId: string }) {
           <IssueList title="Blocking errors" issues={validation.blockingErrors} emptyText="No blocking errors found." tone="error" />
           <IssueList title="Warnings" issues={validation.warnings} emptyText="No warnings found." tone="warning" />
         </div>
-      ) : (
+      ) : isAdmin ? (
         <div className="empty-state">Run validation to see blocking errors, warnings and publishing readiness.</div>
+      ) : (
+        <div className="empty-state">Operators can monitor the published version and scale sync status. Publishing controls are admin-only.</div>
       )}
 
       <div className="version-history-heading">
