@@ -1,0 +1,130 @@
+import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { getHeader } from '../auth/cookie.util';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { RequireRoles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { SessionGuard } from '../auth/session.guard';
+import { RequireStoreAccess } from '../auth/store-access.decorator';
+import { StoreAccessGuard } from '../auth/store-access.guard';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { CatalogService } from './catalog.service';
+
+export type CategoryBody = {
+  name?: unknown;
+  shortName?: unknown;
+  parentId?: unknown;
+  sortOrder?: unknown;
+  status?: unknown;
+};
+
+type ReorderCategoriesBody = {
+  parentId?: unknown;
+  categoryIds?: unknown;
+};
+
+@Controller('stores/:storeId/catalog/categories')
+@UseGuards(SessionGuard, RolesGuard, StoreAccessGuard)
+@RequireRoles('admin', 'operator')
+@RequireStoreAccess('storeId', 'params')
+export class CatalogController {
+  constructor(private readonly catalogService: CatalogService) {}
+
+  @Get()
+  listCategoryTree(@Param('storeId') storeId: string) {
+    return this.catalogService.listCategoryTree(storeId);
+  }
+
+  @Post()
+  createCategory(
+    @Param('storeId') storeId: string,
+    @Body() body: CategoryBody,
+    @Req() request: any,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.catalogService.createCategory(
+      storeId,
+      {
+        name: String(body.name ?? ''),
+        shortName: typeof body.shortName === 'string' ? body.shortName : undefined,
+        parentId: this.optionalString(body.parentId),
+        sortOrder: this.optionalNumber(body.sortOrder),
+        status: typeof body.status === 'string' ? body.status : undefined,
+      },
+      user.id,
+      this.getRequestContext(request),
+    );
+  }
+
+  @Patch(':categoryId')
+  updateCategory(
+    @Param('storeId') storeId: string,
+    @Param('categoryId') categoryId: string,
+    @Body() body: CategoryBody,
+    @Req() request: any,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.catalogService.updateCategory(
+      storeId,
+      categoryId,
+      {
+        name: typeof body.name === 'string' ? body.name : undefined,
+        shortName: typeof body.shortName === 'string' ? body.shortName : undefined,
+        parentId: body.parentId === null ? null : this.optionalString(body.parentId),
+        sortOrder: this.optionalNumber(body.sortOrder),
+        status: typeof body.status === 'string' ? body.status : undefined,
+      },
+      user.id,
+      this.getRequestContext(request),
+    );
+  }
+
+  @Post('reorder')
+  reorderCategories(
+    @Param('storeId') storeId: string,
+    @Body() body: ReorderCategoriesBody,
+    @Req() request: any,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.catalogService.reorderCategories(
+      storeId,
+      {
+        parentId: body.parentId === null ? null : this.optionalString(body.parentId),
+        categoryIds: Array.isArray(body.categoryIds) ? body.categoryIds.map((value) => String(value)) : [],
+      },
+      user.id,
+      this.getRequestContext(request),
+    );
+  }
+
+  private optionalString(value: unknown): string | undefined {
+    return typeof value === 'string' ? value : undefined;
+  }
+
+  private optionalNumber(value: unknown): number | undefined {
+    if (typeof value === 'number') {
+      return value;
+    }
+
+    if (typeof value === 'string' && value.trim() !== '') {
+      return Number(value);
+    }
+
+    return undefined;
+  }
+
+  private getRequestContext(request: any) {
+    return {
+      ipAddress: this.getRequestIp(request),
+      userAgent: getHeader(request, 'user-agent'),
+    };
+  }
+
+  private getRequestIp(request: any): string | undefined {
+    const forwardedFor = getHeader(request, 'x-forwarded-for');
+    if (forwardedFor) {
+      return forwardedFor.split(',')[0]?.trim();
+    }
+
+    return request.ip ?? request.socket?.remoteAddress;
+  }
+}

@@ -909,3 +909,30 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-021`.
+
+## 2026-05-15 05:00 — TASK-023 — Category CRUD tree manager closure
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented Category CRUD/tree/reorder/status support for active StoreCatalog in commit `066e77e`.
+- Manager inspected the implementation and confirmed scope is limited to backend catalog module/controller/service plus expected handoff/lock files.
+- Confirmed store access guards, active catalog lookup, same-catalog parent validation, max depth 3, cycle prevention, sibling sortOrder reorder, category status semantics, and AuditLog writes for category changes.
+- Verified backend build and Prisma schema validation.
+- Ran required Docker verification script successfully.
+- Marked TASK-023 `status` as `done` in `tasks.json` after verification and released `.openclaw/locks/TASK-023.lock`.
+
+Evidence:
+- Coordination commit: `1f002f0 chore: assign TASK-023 category crud tree`.
+- Implementation commit: `066e77e TASK-023 implement category CRUD tree`.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validation: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-023` returned `DOCKER_VERIFY_RESULT=PASS`.
+- Backend reported focused DB/service checks passed for root create, child parentId, cross-catalog parent rejection, cycle rejection, reorder persistence, archived placement semantics, and AuditLog entries.
+
+Notes:
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Placement APIs are not in TASK-023 scope; archived category support is exposed through status and `canAcceptActivePlacements: false` for later TASK-025 integration.
+
+Next:
+- TASK-024 or another eligible pending task can be selected only after after-task check passes and this task receives a final report.

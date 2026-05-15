@@ -1,0 +1,482 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { CategoryStatus, Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+
+export type RequestContext = {
+  ipAddress?: string;
+  userAgent?: string;
+};
+
+export type CreateCategoryInput = {
+  name: string;
+  shortName?: string;
+  parentId?: string;
+  sortOrder?: number;
+  status?: string;
+};
+
+export type UpdateCategoryInput = {
+  name?: string;
+  shortName?: string;
+  parentId?: string | null;
+  sortOrder?: number;
+  status?: string;
+};
+
+export type ReorderCategoriesInput = {
+  parentId?: string | null;
+  categoryIds: string[];
+};
+
+type ActiveCatalogRecord = {
+  id: string;
+  storeId: string;
+  name: string;
+  status: string;
+};
+
+type CategoryRecord = {
+  id: string;
+  catalogId: string;
+  parentId: string | null;
+  name: string;
+  shortName: string;
+  sortOrder: number;
+  status: CategoryStatus;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type CategoryTreeNode = ReturnType<CatalogService['toCategoryResponse']> & { children: CategoryTreeNode[] };
+
+const MAX_CATEGORY_DEPTH = 3;
+
+@Injectable()
+export class CatalogService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async listCategoryTree(storeId: string) {
+    const catalog = await this.findActiveCatalog(storeId);
+    const categories = await this.prisma.category.findMany({
+      where: { catalogId: catalog.id },
+      orderBy: [{ parentId: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+    });
+
+    return {
+      catalog: this.toCatalogResponse(catalog),
+      categories: this.buildCategoryTree(categories),
+    };
+  }
+
+  async createCategory(storeId: string, input: CreateCategoryInput, actorUserId: string, context: RequestContext) {
+    const catalog = await this.findActiveCatalog(storeId);
+    const parentId = this.normalizeOptionalId(input.parentId);
+    const parent = parentId ? await this.findCategoryInCatalog(catalog.id, parentId, 'Parent category not found in active catalog') : null;
+    const depth = parent ? (await this.getCategoryDepth(catalog.id, parent.id)) + 1 : 1;
+    if (depth > MAX_CATEGORY_DEPTH) {
+      throw new BadRequestException(`Category depth cannot exceed ${MAX_CATEGORY_DEPTH} levels`);
+    }
+
+    const data: Prisma.CategoryUncheckedCreateInput = {
+      catalogId: catalog.id,
+      parentId: parent?.id ?? null,
+      name: this.requireName(input.name),
+      shortName: this.requireShortName(input.shortName ?? input.name),
+      sortOrder: this.requireSortOrder(input.sortOrder ?? 0),
+      status: this.requireCategoryStatus(input.status ?? 'active'),
+    };
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const category = await tx.category.create({ data });
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action: 'category.created',
+          entityType: 'Category',
+          entityId: category.id,
+          storeId: catalog.storeId,
+          afterData: this.toCategoryAuditData(category),
+          metadata: {
+            catalogId: catalog.id,
+            canAcceptActivePlacements: this.canAcceptActivePlacements(category),
+          },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+      return category;
+    });
+
+    return { category: this.toCategoryResponse(created) };
+  }
+
+  async updateCategory(
+    storeId: string,
+    categoryId: string,
+    input: UpdateCategoryInput,
+    actorUserId: string,
+    context: RequestContext,
+  ) {
+    const catalog = await this.findActiveCatalog(storeId);
+    const category = await this.findCategoryInCatalog(catalog.id, categoryId, 'Category not found in active catalog');
+    const data: Prisma.CategoryUncheckedUpdateInput = {};
+    let action = 'category.updated';
+
+    if (input.name !== undefined) {
+      data.name = this.requireName(input.name);
+    }
+    if (input.shortName !== undefined) {
+      data.shortName = this.requireShortName(input.shortName);
+    }
+    if (input.sortOrder !== undefined) {
+      data.sortOrder = this.requireSortOrder(input.sortOrder);
+      action = 'category.reordered';
+    }
+    if (input.status !== undefined) {
+      data.status = this.requireCategoryStatus(input.status);
+      action = data.status === 'archived' ? 'category.archived' : 'category.status_changed';
+    }
+    if (input.parentId !== undefined) {
+      const nextParentId = this.normalizeOptionalId(input.parentId);
+      if (nextParentId === category.id) {
+        throw new BadRequestException('Category cannot be its own parent');
+      }
+      if (nextParentId) {
+        const parent = await this.findCategoryInCatalog(catalog.id, nextParentId, 'Parent category not found in active catalog');
+        const isDescendant = await this.isDescendant(catalog.id, parent.id, category.id);
+        if (isDescendant) {
+          throw new BadRequestException('Category parent update would create a cycle');
+        }
+        const subtreeDepth = await this.getSubtreeDepth(catalog.id, category.id);
+        const parentDepth = await this.getCategoryDepth(catalog.id, parent.id);
+        if (parentDepth + subtreeDepth > MAX_CATEGORY_DEPTH) {
+          throw new BadRequestException(`Category depth cannot exceed ${MAX_CATEGORY_DEPTH} levels`);
+        }
+      } else {
+        const subtreeDepth = await this.getSubtreeDepth(catalog.id, category.id);
+        if (subtreeDepth > MAX_CATEGORY_DEPTH) {
+          throw new BadRequestException(`Category depth cannot exceed ${MAX_CATEGORY_DEPTH} levels`);
+        }
+      }
+      data.parentId = nextParentId;
+    }
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('At least one category field is required');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.category.update({ where: { catalogId_id: { catalogId: catalog.id, id: category.id } }, data });
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action,
+          entityType: 'Category',
+          entityId: category.id,
+          storeId: catalog.storeId,
+          beforeData: this.toCategoryAuditData(category),
+          afterData: this.toCategoryAuditData(result),
+          metadata: {
+            catalogId: catalog.id,
+            canAcceptActivePlacements: this.canAcceptActivePlacements(result),
+          },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+      return result;
+    });
+
+    return { category: this.toCategoryResponse(updated) };
+  }
+
+  async reorderCategories(storeId: string, input: ReorderCategoriesInput, actorUserId: string, context: RequestContext) {
+    const catalog = await this.findActiveCatalog(storeId);
+    const parentId = this.normalizeOptionalId(input.parentId);
+    const categoryIds = input.categoryIds.map((id) => this.normalizeRequiredId(id, 'Category id is required'));
+    if (categoryIds.length === 0) {
+      throw new BadRequestException('categoryIds must contain at least one category id');
+    }
+    if (new Set(categoryIds).size !== categoryIds.length) {
+      throw new BadRequestException('categoryIds cannot contain duplicates');
+    }
+
+    if (parentId) {
+      await this.findCategoryInCatalog(catalog.id, parentId, 'Parent category not found in active catalog');
+    }
+
+    const categories = await this.prisma.category.findMany({
+      where: {
+        catalogId: catalog.id,
+        parentId: parentId ?? null,
+        id: { in: categoryIds },
+      },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+
+    if (categories.length !== categoryIds.length) {
+      throw new BadRequestException('All reordered categories must exist in the same catalog and sibling level');
+    }
+
+    const beforeData = categories.map((category) => this.toCategoryAuditData(category));
+    const orderById = new Map(categoryIds.map((id, index) => [id, index]));
+
+    const updatedCategories = await this.prisma.$transaction(async (tx) => {
+      await Promise.all(
+        categoryIds.map((id, index) =>
+          tx.category.update({
+            where: { catalogId_id: { catalogId: catalog.id, id } },
+            data: { sortOrder: index },
+          }),
+        ),
+      );
+
+      const updated = await tx.category.findMany({
+        where: { catalogId: catalog.id, parentId: parentId ?? null, id: { in: categoryIds } },
+      });
+      updated.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action: 'category.reordered',
+          entityType: 'Category',
+          entityId: parentId,
+          storeId: catalog.storeId,
+          beforeData,
+          afterData: updated.map((category) => this.toCategoryAuditData(category)),
+          metadata: { catalogId: catalog.id, parentId, categoryIds },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+
+      return updated;
+    });
+
+    return { categories: updatedCategories.map((category) => this.toCategoryResponse(category)) };
+  }
+
+  private async findActiveCatalog(storeId: string): Promise<ActiveCatalogRecord> {
+    const normalizedStoreId = this.normalizeRequiredId(storeId, 'Store id is required');
+    const catalog = await this.prisma.storeCatalog.findFirst({
+      where: { storeId: normalizedStoreId, status: 'active' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, storeId: true, name: true, status: true },
+    });
+
+    if (!catalog) {
+      throw new NotFoundException('Active store catalog not found');
+    }
+
+    return catalog;
+  }
+
+  private async findCategoryInCatalog(catalogId: string, categoryId: string, message: string): Promise<CategoryRecord> {
+    const normalizedCategoryId = this.normalizeRequiredId(categoryId, 'Category id is required');
+    const category = await this.prisma.category.findUnique({
+      where: { catalogId_id: { catalogId, id: normalizedCategoryId } },
+    });
+
+    if (!category) {
+      throw new BadRequestException(message);
+    }
+
+    return category;
+  }
+
+  private async getCategoryDepth(catalogId: string, categoryId: string): Promise<number> {
+    let depth = 0;
+    let currentId: string | null = categoryId;
+    const seen = new Set<string>();
+
+    while (currentId) {
+      if (seen.has(currentId)) {
+        throw new BadRequestException('Category cycle detected');
+      }
+      seen.add(currentId);
+      const category: { id: string; parentId: string | null } | null = await this.prisma.category.findUnique({
+        where: { catalogId_id: { catalogId, id: currentId } },
+        select: { id: true, parentId: true },
+      });
+      if (!category) {
+        throw new BadRequestException('Category not found in active catalog');
+      }
+      depth += 1;
+      currentId = category.parentId;
+    }
+
+    return depth;
+  }
+
+  private async getSubtreeDepth(catalogId: string, categoryId: string): Promise<number> {
+    const categories = await this.prisma.category.findMany({ where: { catalogId }, select: { id: true, parentId: true } });
+    const childrenByParent = new Map<string, string[]>();
+    for (const category of categories) {
+      if (!category.parentId) {
+        continue;
+      }
+      const children = childrenByParent.get(category.parentId) ?? [];
+      children.push(category.id);
+      childrenByParent.set(category.parentId, children);
+    }
+
+    const walk = (id: string, seen: Set<string>): number => {
+      if (seen.has(id)) {
+        throw new BadRequestException('Category cycle detected');
+      }
+      seen.add(id);
+      const children = childrenByParent.get(id) ?? [];
+      if (children.length === 0) {
+        return 1;
+      }
+
+      return 1 + Math.max(...children.map((childId) => walk(childId, new Set(seen))));
+    };
+
+    return walk(categoryId, new Set<string>());
+  }
+
+  private async isDescendant(catalogId: string, possibleDescendantId: string, ancestorId: string): Promise<boolean> {
+    let currentId: string | null = possibleDescendantId;
+    const seen = new Set<string>();
+
+    while (currentId) {
+      if (currentId === ancestorId) {
+        return true;
+      }
+      if (seen.has(currentId)) {
+        throw new BadRequestException('Category cycle detected');
+      }
+      seen.add(currentId);
+      const category: { parentId: string | null } | null = await this.prisma.category.findUnique({
+        where: { catalogId_id: { catalogId, id: currentId } },
+        select: { parentId: true },
+      });
+      currentId = category?.parentId ?? null;
+    }
+
+    return false;
+  }
+
+  private buildCategoryTree(categories: CategoryRecord[]): CategoryTreeNode[] {
+    const nodes = new Map<string, CategoryTreeNode>();
+    for (const category of categories) {
+      nodes.set(category.id, { ...this.toCategoryResponse(category), children: [] });
+    }
+
+    const roots: CategoryTreeNode[] = [];
+    for (const category of categories) {
+      const node = nodes.get(category.id)!;
+      if (category.parentId && nodes.has(category.parentId)) {
+        nodes.get(category.parentId)!.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+
+    const sortTree = (items: CategoryTreeNode[]) => {
+      items.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+      for (const item of items) {
+        sortTree(item.children);
+      }
+    };
+    sortTree(roots);
+
+    return roots;
+  }
+
+  private requireName(name: string): string {
+    const normalizedValue = typeof name === 'string' ? name.trim() : '';
+    if (!normalizedValue || normalizedValue.length > 255) {
+      throw new BadRequestException('Category name is required and must be at most 255 characters');
+    }
+
+    return normalizedValue;
+  }
+
+  private requireShortName(shortName: string): string {
+    const normalizedValue = typeof shortName === 'string' ? shortName.trim() : '';
+    if (!normalizedValue || normalizedValue.length > 128) {
+      throw new BadRequestException('Category shortName is required and must be at most 128 characters');
+    }
+
+    return normalizedValue;
+  }
+
+  private requireSortOrder(sortOrder: number): number {
+    if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 1_000_000) {
+      throw new BadRequestException('Category sortOrder must be an integer between 0 and 1000000');
+    }
+
+    return sortOrder;
+  }
+
+  private requireCategoryStatus(status: string): CategoryStatus {
+    const normalizedValue = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    if (!['active', 'inactive', 'archived'].includes(normalizedValue)) {
+      throw new BadRequestException('Category status must be active, inactive, or archived');
+    }
+
+    return normalizedValue as CategoryStatus;
+  }
+
+  private normalizeOptionalId(value: string | null | undefined): string | null {
+    if (value === null) {
+      return null;
+    }
+
+    const normalizedValue = typeof value === 'string' ? value.trim() : '';
+    return normalizedValue || null;
+  }
+
+  private normalizeRequiredId(value: string, message: string): string {
+    const normalizedValue = typeof value === 'string' ? value.trim() : '';
+    if (!normalizedValue) {
+      throw new BadRequestException(message);
+    }
+
+    return normalizedValue;
+  }
+
+  private canAcceptActivePlacements(category: { status: CategoryStatus }): boolean {
+    return category.status === 'active';
+  }
+
+  private toCatalogResponse(catalog: ActiveCatalogRecord) {
+    return {
+      id: catalog.id,
+      storeId: catalog.storeId,
+      name: catalog.name,
+      status: catalog.status,
+    };
+  }
+
+  private toCategoryResponse(category: CategoryRecord) {
+    return {
+      id: category.id,
+      catalogId: category.catalogId,
+      parentId: category.parentId,
+      name: category.name,
+      shortName: category.shortName,
+      sortOrder: category.sortOrder,
+      status: category.status,
+      canAcceptActivePlacements: this.canAcceptActivePlacements(category),
+      createdAt: category.createdAt.toISOString(),
+      updatedAt: category.updatedAt.toISOString(),
+    };
+  }
+
+  private toCategoryAuditData(category: CategoryRecord) {
+    return {
+      id: category.id,
+      catalogId: category.catalogId,
+      parentId: category.parentId,
+      name: category.name,
+      shortName: category.shortName,
+      sortOrder: category.sortOrder,
+      status: category.status,
+      canAcceptActivePlacements: this.canAcceptActivePlacements(category),
+    };
+  }
+}
