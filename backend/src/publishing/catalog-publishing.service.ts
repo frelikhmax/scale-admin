@@ -1,0 +1,148 @@
+import { randomUUID } from 'crypto';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { PrismaService } from '../prisma/prisma.service';
+import type { RequestContext } from '../catalog/catalog.service';
+import { CatalogPackageData, CatalogPackageService } from './catalog-package.service';
+import { CatalogValidationService } from './catalog-validation.service';
+
+export type PublishCatalogOptions = {
+  /** Test-only hook used to verify database transaction rollback semantics. */
+  failAfterVersionCreate?: boolean;
+};
+
+@Injectable()
+export class CatalogPublishingService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly catalogValidationService: CatalogValidationService,
+    private readonly catalogPackageService: CatalogPackageService,
+  ) {}
+
+  async publishActiveCatalog(
+    storeId: string,
+    actorUser: Pick<AuthenticatedUser, 'id'> | undefined,
+    context: RequestContext,
+    options: PublishCatalogOptions = {},
+  ) {
+    const validation = await this.catalogValidationService.validateActiveCatalog(storeId);
+    if (!validation.canPublish) {
+      throw new BadRequestException({
+        message: 'Catalog has blocking validation errors and cannot be published',
+        validation,
+      });
+    }
+
+    const draftPackage = await this.catalogPackageService.generateActiveCatalogPackage(storeId);
+    const catalog = validation.catalog;
+    const versionId = randomUUID();
+    const publishedAt = new Date();
+
+    const version = await this.prisma.$transaction(
+      async (tx) => {
+        const latest = await tx.catalogVersion.aggregate({
+          where: { catalogId: catalog.id },
+          _max: { versionNumber: true },
+        });
+        const versionNumber = (latest._max.versionNumber ?? 0) + 1;
+        const packageDataWithVersion = this.withVersionMetadata(draftPackage.packageData, {
+          id: versionId,
+          versionNumber,
+          publishedAt,
+          checksum: null,
+        });
+        const packageChecksum = this.catalogPackageService.calculatePackageChecksum(packageDataWithVersion);
+        const finalPackageData = this.withVersionMetadata(packageDataWithVersion, { checksum: packageChecksum });
+
+        const createdVersion = await tx.catalogVersion.create({
+          data: {
+            id: versionId,
+            catalogId: catalog.id,
+            storeId: catalog.storeId,
+            versionNumber,
+            status: 'published',
+            publishedByUserId: actorUser?.id,
+            publishedAt,
+            basedOnVersionId: catalog.currentVersionId,
+            packageData: finalPackageData as unknown as Prisma.InputJsonValue,
+            packageChecksum,
+          },
+        });
+
+        if (options.failAfterVersionCreate) {
+          throw new Error('Simulated publish failure after CatalogVersion creation');
+        }
+
+        await tx.storeCatalog.update({
+          where: { id_storeId: { id: catalog.id, storeId: catalog.storeId } },
+          data: { currentVersionId: createdVersion.id },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            actorUserId: actorUser?.id,
+            action: 'catalog_version.published',
+            entityType: 'CatalogVersion',
+            entityId: createdVersion.id,
+            storeId: catalog.storeId,
+            beforeData: { currentVersionId: catalog.currentVersionId },
+            afterData: {
+              currentVersionId: createdVersion.id,
+              catalogId: catalog.id,
+              versionNumber: createdVersion.versionNumber,
+              packageChecksum: createdVersion.packageChecksum,
+            },
+            metadata: {
+              validationSummary: validation.summary,
+              warningCount: validation.warnings.length,
+            },
+            ipAddress: context.ipAddress,
+            userAgent: context.userAgent,
+          },
+        });
+
+        return createdVersion;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    return {
+      catalog: {
+        id: catalog.id,
+        storeId: catalog.storeId,
+        previousVersionId: catalog.currentVersionId,
+        currentVersionId: version.id,
+      },
+      version: {
+        id: version.id,
+        catalogId: version.catalogId,
+        storeId: version.storeId,
+        versionNumber: version.versionNumber,
+        status: version.status,
+        publishedByUserId: version.publishedByUserId,
+        publishedAt: version.publishedAt,
+        basedOnVersionId: version.basedOnVersionId,
+        packageData: version.packageData,
+        packageChecksum: version.packageChecksum,
+      },
+      validation,
+    };
+  }
+
+  private withVersionMetadata(
+    packageData: CatalogPackageData,
+    metadata: Partial<Omit<CatalogPackageData['version'], 'publishedAt'>> & { publishedAt?: string | Date | null },
+  ): CatalogPackageData {
+    const publishedAt = metadata.publishedAt instanceof Date ? metadata.publishedAt.toISOString() : (metadata.publishedAt ?? packageData.version.publishedAt);
+
+    return {
+      ...packageData,
+      version: {
+        ...packageData.version,
+        ...metadata,
+        publishedAt,
+      },
+    };
+  }
+}
