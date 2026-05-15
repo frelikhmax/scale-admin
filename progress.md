@@ -968,3 +968,37 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main` and the task branch, then run `scripts/openclaw-after-task-check.sh TASK-025`.
+
+## 2026-05-15 08:39 — TASK-027 — StoreProductPrice API
+
+Status: done
+Owner: backend
+Summary:
+- Backend implemented TASK-027 in commit `e91838a TASK-027 implement store product price API` without marking `tasks.json` done.
+- Added protected Prices API scoped to a store active catalog and existing store access guards.
+- Added list response for active-catalog placed products with product data, category data, current active price and `missingPrice` indicator.
+- Added price set/upsert endpoints with `price > 0` validation and default `RUB` currency.
+- Enforced MVP one active price per store/product in service logic by updating the primary active price and archiving duplicate active rows if found.
+- Confirmed Product rows are not modified by price changes.
+- Price changes write AuditLog entries.
+- Manager verified code scope, backend build, Prisma schema validation, source-level acceptance criteria and deterministic Docker verification.
+- Marked TASK-027 `status` as `done` after manager verification and Docker verification passed.
+- Released `.openclaw/locks/TASK-027.lock`.
+
+Evidence:
+- Coordination commit: `66f52f9 chore: assign TASK-027 store product price api`.
+- Implementation commit inspected: `e91838a TASK-027 implement store product price API`.
+- Changed implementation files: `backend/src/prices/prices.controller.ts`, `backend/src/prices/prices.module.ts`, `backend/src/prices/prices.service.ts`.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validation: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Whitespace check: `git diff --check 66f52f9..HEAD` passed.
+- Backend reported focused DB/service checks passed for listing prices, setting a valid price, Product unchanged, `price <= 0` validation, AuditLog entry, and list showing current price.
+- Manager source checks confirmed `missingPrice`, default `RUB`, `price.created`/`price.updated` AuditLog actions, active placed product validation and `Price must be greater than 0` validation.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-027` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- No DB partial unique index was added for one active price per store/product; service logic enforces the MVP invariant while preserving future model flexibility.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+
+Next:
+- Merge task branch to `main`, push `main` and the task branch, then run `scripts/openclaw-after-task-check.sh TASK-027`.
