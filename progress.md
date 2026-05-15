@@ -1196,3 +1196,30 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-037`.
+
+## 2026-05-15 11:18 — TASK-038 — Scale check-update full package
+
+Status: done
+Owner: backend
+Summary:
+- Implemented authenticated `POST /api/scales/check-update` for registered scale devices.
+- Returns `hasUpdate: false` with `currentVersionId` when the submitted version matches the active published catalog version.
+- Returns `hasUpdate: true` with `versionId`, `versionNumber`, `packageChecksum`, and immutable published `packageData` when a package is needed.
+- Updates `ScaleDevice.lastSeenAt` on successful check-update.
+- Writes `ScaleSyncLog` records for check-update outcomes (`no_update` or `package_delivered`).
+- Preserved TASK-037 scale auth/rate limiting and avoided exposing plain tokens or token hashes.
+- Marked TASK-038 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `6871ab2 TASK-038 implement scale check-update`.
+- Backend build: `cd backend && npm run build` passed.
+- Prisma validation: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Focused backend check: `cd backend && node test/scale-check-update-check.js` returned `SCALE_CHECK_UPDATE_CHECK=PASS`.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-038` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to `main`, push `main` and task branch, then run `scripts/openclaw-after-task-check.sh TASK-038`.
