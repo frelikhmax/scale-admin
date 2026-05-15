@@ -1419,3 +1419,31 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-022`.
+
+## 2026-05-15T13:52:00+02:00 — TASK-024 — Catalog category tree UI
+
+Status: done
+Owner: frontend (manager-bound subagent)
+Summary:
+- Added Store Details Catalog tab for active catalog category tree management.
+- Added RTK Query category API integration for list/create/update/reorder using CSRF-protected mutations.
+- Added UI for viewing category tree, creating root/child categories, editing name/shortName/status/parent and reordering siblings.
+- Added visible backend error display and archive warning for categories that may affect active placements/publication.
+- Marked TASK-024 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `7721e41 TASK-024 add catalog category tree UI`.
+- Changed files inspected: `frontend/src/features/catalog/catalogApi.ts`, `frontend/src/main.tsx`, `frontend/src/shared/api/backendApi.ts`, `frontend/src/styles.css`.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Frontend build: `npm --prefix frontend run build` passed.
+- Frontend typecheck: `cd frontend && npm exec tsc -- -b` passed.
+- Focused source check: `TASK_024_FOCUSED_SOURCE_CHECK=PASS`.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-024` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-024`.

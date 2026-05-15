@@ -9,6 +9,14 @@ import {
   useLogoutMutation,
   type AuthUser,
 } from './features/auth/authApi';
+import {
+  useCreateCatalogCategoryMutation,
+  useListCatalogCategoriesQuery,
+  useReorderCatalogCategoriesMutation,
+  useUpdateCatalogCategoryMutation,
+  type CatalogCategory,
+  type CategoryStatus,
+} from './features/catalog/catalogApi';
 import { useGetHealthQuery } from './features/health/healthApi';
 import {
   useListStorePricesQuery,
@@ -347,6 +355,7 @@ function StoreDetails({ user, storeId, onNavigate }: { user: AuthUser; storeId: 
             <div><dt>Created</dt><dd>{new Date(store.createdAt).toLocaleString()}</dd></div>
             <div><dt>Updated</dt><dd>{new Date(store.updatedAt).toLocaleString()}</dd></div>
           </dl>
+          <CatalogTab storeId={store.id} />
           <ScaleDevicesTab storeId={store.id} userRole={user.role} currentVersionId={currentVersion?.id ?? null} />
           <PricesTab storeId={store.id} />
           <PublishingTab storeId={store.id} userRole={user.role} currentVersion={currentVersion} />
@@ -354,6 +363,399 @@ function StoreDetails({ user, storeId, onNavigate }: { user: AuthUser; storeId: 
       )}
     </section>
   );
+}
+
+
+type CategoryFormState = {
+  name: string;
+  shortName: string;
+  status: CategoryStatus;
+  parentId: string;
+};
+
+const emptyCategoryForm = (parentId = ''): CategoryFormState => ({
+  name: '',
+  shortName: '',
+  status: 'active',
+  parentId,
+});
+
+function CatalogTab({ storeId }: { storeId: string }) {
+  const { data, error, isLoading, isFetching, refetch } = useListCatalogCategoriesQuery(storeId);
+  const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
+  const [createCategory, { isLoading: creating }] = useCreateCatalogCategoryMutation();
+  const [updateCategory, { isLoading: updating }] = useUpdateCatalogCategoryMutation();
+  const [reorderCategories, { isLoading: reordering }] = useReorderCatalogCategoriesMutation();
+  const [rootForm, setRootForm] = useState<CategoryFormState>(emptyCategoryForm());
+  const [childParentId, setChildParentId] = useState<string | null>(null);
+  const [childForm, setChildForm] = useState<CategoryFormState>(emptyCategoryForm());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<CategoryFormState>(emptyCategoryForm());
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const categories = data?.categories ?? [];
+  const flatCategories = useMemo(() => flattenCategories(categories), [categories]);
+  const errorMessage = error && 'message' in error ? error.message : null;
+
+  async function getCsrfOrThrow() {
+    const csrfData = csrf ?? (await refetchCsrf()).data;
+    if (!csrfData) {
+      throw new Error('Не удалось подготовить защищённую форму. Повторите попытку.');
+    }
+    return csrfData;
+  }
+
+  function categoryPayload(form: CategoryFormState, includeParent: boolean) {
+    const name = form.name.trim();
+    const shortName = form.shortName.trim();
+    if (!name) {
+      throw new Error('Category name is required.');
+    }
+    return {
+      name,
+      shortName: shortName || name,
+      status: form.status,
+      ...(includeParent ? { parentId: form.parentId || null } : {}),
+    };
+  }
+
+  async function handleCreateRoot(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const csrfData = await getCsrfOrThrow();
+      await createCategory({
+        storeId,
+        ...categoryPayload(rootForm, false),
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setRootForm(emptyCategoryForm());
+      setActionNotice('Root category created.');
+    } catch (error) {
+      setActionError(errorMessageFromUnknown(error, 'Category could not be created.'));
+    }
+  }
+
+  async function handleCreateChild(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!childParentId) return;
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const csrfData = await getCsrfOrThrow();
+      await createCategory({
+        storeId,
+        ...categoryPayload({ ...childForm, parentId: childParentId }, true),
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setChildParentId(null);
+      setChildForm(emptyCategoryForm());
+      setActionNotice('Child category created.');
+    } catch (error) {
+      setActionError(errorMessageFromUnknown(error, 'Child category could not be created.'));
+    }
+  }
+
+  function startEdit(category: CatalogCategory) {
+    setEditingId(category.id);
+    setChildParentId(null);
+    setActionError(null);
+    setActionNotice(null);
+    setEditForm({
+      name: category.name,
+      shortName: category.shortName,
+      status: category.status,
+      parentId: category.parentId ?? '',
+    });
+  }
+
+  async function handleUpdate(category: CatalogCategory, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setActionError(null);
+    setActionNotice(null);
+    if (category.status !== 'archived' && editForm.status === 'archived') {
+      const confirmed = window.confirm('Archiving this category can affect active products: archived/inactive categories cannot accept active placements. Continue?');
+      if (!confirmed) return;
+    }
+    try {
+      const csrfData = await getCsrfOrThrow();
+      await updateCategory({
+        storeId,
+        categoryId: category.id,
+        ...categoryPayload(editForm, true),
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setEditingId(null);
+      setActionNotice('Category updated.');
+    } catch (error) {
+      setActionError(errorMessageFromUnknown(error, 'Category could not be updated.'));
+    }
+  }
+
+  async function moveCategory(category: CatalogCategory, siblings: CatalogCategory[], direction: -1 | 1) {
+    const currentIndex = siblings.findIndex((sibling) => sibling.id === category.id);
+    const nextIndex = currentIndex + direction;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= siblings.length) return;
+    const nextIds = siblings.map((sibling) => sibling.id);
+    [nextIds[currentIndex], nextIds[nextIndex]] = [nextIds[nextIndex], nextIds[currentIndex]];
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const csrfData = await getCsrfOrThrow();
+      await reorderCategories({
+        storeId,
+        parentId: category.parentId,
+        categoryIds: nextIds,
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setActionNotice('Category order updated.');
+    } catch (error) {
+      setActionError(errorMessageFromUnknown(error, 'Category order could not be updated.'));
+    }
+  }
+
+  return (
+    <section className="catalog-tab" aria-labelledby="catalog-title">
+      <div className="panel-heading catalog-heading">
+        <div>
+          <p className="eyebrow">Catalog tab</p>
+          <h3 id="catalog-title">Active catalog categories</h3>
+          <p className="muted">Manage the category tree used by prices, product placements and publishing.</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? 'Refreshing...' : 'Refresh catalog'}
+        </button>
+      </div>
+
+      {data?.catalog && (
+        <div className="catalog-summary">
+          <strong>{data.catalog.name}</strong>
+          <span className={`badge badge-${data.catalog.status}`}>{data.catalog.status}</span>
+          <small>Catalog ID: <code>{data.catalog.id}</code></small>
+        </div>
+      )}
+
+      <form className="category-form category-root-form" onSubmit={handleCreateRoot}>
+        <CategoryFields form={rootForm} onChange={setRootForm} />
+        <button type="submit" disabled={creating}>{creating ? 'Creating...' : 'Create root category'}</button>
+      </form>
+
+      <div className="status status-warning category-archive-warning">
+        Archiving warning: categories with status archived or inactive cannot accept active product placements. If active products are already placed here, validation/publishing can be blocked until placements are moved or deactivated.
+      </div>
+      {actionNotice && <div className="status status-ok" role="status">{actionNotice}</div>}
+      {actionError && <div className="form-error" role="alert">{actionError}</div>}
+      {isLoading && <div className="status status-loading">Loading active catalog categories...</div>}
+      {errorMessage && <div className="form-error" role="alert">{errorMessage}</div>}
+      {!isLoading && !errorMessage && categories.length === 0 && <div className="empty-state">No categories yet. Create the first root category above.</div>}
+      {categories.length > 0 && (
+        <div className="category-tree" role="tree" aria-label="Active catalog category tree">
+          <CategoryTreeList
+            categories={categories}
+            allCategories={flatCategories}
+            childForm={childForm}
+            childParentId={childParentId}
+            editingId={editingId}
+            editForm={editForm}
+            busy={creating || updating || reordering}
+            onAddChild={(category) => {
+              setEditingId(null);
+              setChildParentId(category.id);
+              setChildForm(emptyCategoryForm(category.id));
+              setActionError(null);
+              setActionNotice(null);
+            }}
+            onCancelChild={() => setChildParentId(null)}
+            onChildFormChange={setChildForm}
+            onCreateChild={handleCreateChild}
+            onEdit={startEdit}
+            onCancelEdit={() => setEditingId(null)}
+            onEditFormChange={setEditForm}
+            onUpdate={handleUpdate}
+            onMove={moveCategory}
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CategoryTreeList({
+  categories,
+  allCategories,
+  childForm,
+  childParentId,
+  editingId,
+  editForm,
+  busy,
+  onAddChild,
+  onCancelChild,
+  onChildFormChange,
+  onCreateChild,
+  onEdit,
+  onCancelEdit,
+  onEditFormChange,
+  onUpdate,
+  onMove,
+}: {
+  categories: CatalogCategory[];
+  allCategories: CatalogCategory[];
+  childForm: CategoryFormState;
+  childParentId: string | null;
+  editingId: string | null;
+  editForm: CategoryFormState;
+  busy: boolean;
+  onAddChild: (category: CatalogCategory) => void;
+  onCancelChild: () => void;
+  onChildFormChange: (form: CategoryFormState) => void;
+  onCreateChild: (event: FormEvent<HTMLFormElement>) => void;
+  onEdit: (category: CatalogCategory) => void;
+  onCancelEdit: () => void;
+  onEditFormChange: (form: CategoryFormState) => void;
+  onUpdate: (category: CatalogCategory, event: FormEvent<HTMLFormElement>) => void;
+  onMove: (category: CatalogCategory, siblings: CatalogCategory[], direction: -1 | 1) => void;
+}) {
+  return (
+    <ul className="category-list">
+      {categories.map((category, index) => (
+        <li className="category-node" key={category.id} role="treeitem" aria-expanded={category.children.length > 0}>
+          <div className={category.status === 'archived' ? 'category-card category-card-archived' : 'category-card'}>
+            {editingId === category.id ? (
+              <form className="category-edit-form" onSubmit={(event) => onUpdate(category, event)}>
+                <CategoryFields form={editForm} onChange={onEditFormChange} showParent allCategories={allCategories} currentCategory={category} />
+                <div className="category-actions">
+                  <button type="submit" disabled={busy}>{busy ? 'Saving...' : 'Save category'}</button>
+                  <button className="secondary-button" type="button" onClick={onCancelEdit}>Cancel</button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className="category-card-main">
+                  <div>
+                    <div className="category-title-row">
+                      <strong>{category.name}</strong>
+                      <span className={`badge badge-${category.status}`}>{category.status}</span>
+                      {!category.canAcceptActivePlacements && <span className="price-warning">No active placements</span>}
+                    </div>
+                    <p className="muted">Short: {category.shortName} · Order: {category.sortOrder}</p>
+                    <small><code>{category.id}</code></small>
+                  </div>
+                  <div className="category-actions">
+                    <button className="secondary-button" type="button" onClick={() => onMove(category, categories, -1)} disabled={busy || index === 0}>↑</button>
+                    <button className="secondary-button" type="button" onClick={() => onMove(category, categories, 1)} disabled={busy || index === categories.length - 1}>↓</button>
+                    <button className="secondary-button" type="button" onClick={() => onAddChild(category)} disabled={busy}>Add child</button>
+                    <button type="button" onClick={() => onEdit(category)} disabled={busy}>Edit</button>
+                  </div>
+                </div>
+                {childParentId === category.id && (
+                  <form className="category-form category-child-form" onSubmit={onCreateChild}>
+                    <CategoryFields form={childForm} onChange={onChildFormChange} />
+                    <div className="category-actions">
+                      <button type="submit" disabled={busy}>{busy ? 'Creating...' : `Create child of ${category.name}`}</button>
+                      <button className="secondary-button" type="button" onClick={onCancelChild}>Cancel</button>
+                    </div>
+                  </form>
+                )}
+              </>
+            )}
+          </div>
+          {category.children.length > 0 && (
+            <CategoryTreeList
+              categories={category.children}
+              allCategories={allCategories}
+              childForm={childForm}
+              childParentId={childParentId}
+              editingId={editingId}
+              editForm={editForm}
+              busy={busy}
+              onAddChild={onAddChild}
+              onCancelChild={onCancelChild}
+              onChildFormChange={onChildFormChange}
+              onCreateChild={onCreateChild}
+              onEdit={onEdit}
+              onCancelEdit={onCancelEdit}
+              onEditFormChange={onEditFormChange}
+              onUpdate={onUpdate}
+              onMove={onMove}
+            />
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function CategoryFields({
+  form,
+  onChange,
+  showParent = false,
+  allCategories = [],
+  currentCategory,
+}: {
+  form: CategoryFormState;
+  onChange: (form: CategoryFormState) => void;
+  showParent?: boolean;
+  allCategories?: CatalogCategory[];
+  currentCategory?: CatalogCategory;
+}) {
+  const descendantIds = useMemo(() => currentCategory ? collectDescendantIds(currentCategory) : new Set<string>(), [currentCategory]);
+  const parentOptions = allCategories.filter((category) => category.id !== currentCategory?.id && !descendantIds.has(category.id));
+
+  return (
+    <div className="category-fields">
+      <label>
+        Name
+        <input value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} placeholder="Bakery" />
+      </label>
+      <label>
+        Short name
+        <input value={form.shortName} onChange={(event) => onChange({ ...form, shortName: event.target.value })} placeholder="Optional display name" />
+      </label>
+      <label>
+        Status
+        <select value={form.status} onChange={(event) => onChange({ ...form, status: event.target.value as CategoryStatus })}>
+          <option value="active">active</option>
+          <option value="inactive">inactive</option>
+          <option value="archived">archived</option>
+        </select>
+      </label>
+      {showParent && (
+        <label>
+          Parent
+          <select value={form.parentId} onChange={(event) => onChange({ ...form, parentId: event.target.value })}>
+            <option value="">Root level</option>
+            {parentOptions.map((category) => (
+              <option key={category.id} value={category.id}>{category.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
+}
+
+function flattenCategories(categories: CatalogCategory[]): CatalogCategory[] {
+  return categories.flatMap((category) => [category, ...flattenCategories(category.children)]);
+}
+
+function collectDescendantIds(category: CatalogCategory): Set<string> {
+  const ids = new Set<string>();
+  for (const child of category.children) {
+    ids.add(child.id);
+    for (const descendantId of collectDescendantIds(child)) {
+      ids.add(descendantId);
+    }
+  }
+  return ids;
+}
+
+function errorMessageFromUnknown(error: unknown, fallback: string) {
+  return error && typeof error === 'object' && 'message' in error ? String(error.message) : fallback;
 }
 
 function ScaleDevicesTab({ storeId, userRole, currentVersionId }: { storeId: string; userRole: AuthUser['role']; currentVersionId: string | null }) {
