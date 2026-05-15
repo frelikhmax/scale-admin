@@ -10,11 +10,15 @@ type BackendErrorData = {
   message?: string | string[];
   error?: string;
   statusCode?: number;
+  code?: string;
+  moveRequired?: boolean;
+  existingPlacement?: unknown;
 };
 
 export type ApiError = {
   status: number | 'FETCH_ERROR' | 'PARSING_ERROR' | 'TIMEOUT_ERROR' | 'CUSTOM_ERROR';
   message: string;
+  data?: BackendErrorData;
 };
 
 const backendBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
@@ -39,6 +43,7 @@ function messageFromData(data: unknown): string | undefined {
 
 function normalizeError(error: FetchBaseQueryError): ApiError {
   const backendMessage = messageFromData(error.data);
+  const backendData = error.data && typeof error.data === 'object' ? (error.data as BackendErrorData) : undefined;
 
   if (error.status === 401) {
     return {
@@ -98,6 +103,7 @@ function normalizeError(error: FetchBaseQueryError): ApiError {
   return {
     status: error.status,
     message: backendMessage ?? `Backend returned HTTP ${error.status}`,
+    data: backendData,
   };
 }
 
@@ -118,6 +124,6 @@ const backendBaseQuery: BaseQueryFn<string | FetchArgs, unknown, ApiError> = asy
 export const backendApi = createApi({
   reducerPath: 'backendApi',
   baseQuery: backendBaseQuery,
-  tagTypes: ['Session', 'Stores', 'Products', 'Prices', 'Publishing', 'Users', 'UserStoreAccess', 'ScaleDevices', 'CatalogCategories'],
+  tagTypes: ['Session', 'Stores', 'Products', 'Prices', 'Publishing', 'Users', 'UserStoreAccess', 'ScaleDevices', 'CatalogCategories', 'CatalogPlacements'],
   endpoints: () => ({}),
 });

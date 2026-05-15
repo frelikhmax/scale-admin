@@ -1054,6 +1054,50 @@ select:focus {
   gap: 1rem;
 }
 
+.placement-panel {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid #dce4f3;
+  border-radius: 18px;
+  background: #fbfdff;
+}
+
+.placement-heading h4 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.placement-form {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(14rem, 1.4fr) minmax(14rem, 1.4fr) auto;
+  gap: 1rem;
+  align-items: end;
+  margin-bottom: 0.75rem;
+}
+
+.placement-form button {
+  margin-top: 0;
+}
+
+.placement-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.placement-card {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem;
+  border: 1px solid #dce4f3;
+  border-radius: 14px;
+  background: white;
+}
+
 .category-root-form,
 .category-child-form {
   margin-bottom: 1rem;
@@ -1132,11 +1176,13 @@ select:focus {
 
 @media (max-width: 900px) {
   .category-fields,
-  .category-fields:has(label:nth-child(4)) {
+  .category-fields:has(label:nth-child(4)),
+  .placement-form {
     grid-template-columns: 1fr;
   }
 
-  .category-card-main {
+  .category-card-main,
+  .placement-card {
     display: grid;
   }
 

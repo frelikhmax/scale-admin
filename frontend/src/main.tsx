@@ -11,10 +11,15 @@ import {
 } from './features/auth/authApi';
 import {
   useCreateCatalogCategoryMutation,
+  useCreateCatalogPlacementMutation,
   useListCatalogCategoriesQuery,
+  useListCatalogPlacementsQuery,
+  useMoveCatalogPlacementMutation,
   useReorderCatalogCategoriesMutation,
+  useReorderCatalogPlacementsMutation,
   useUpdateCatalogCategoryMutation,
   type CatalogCategory,
+  type CatalogProductPlacement,
   type CategoryStatus,
 } from './features/catalog/catalogApi';
 import { useGetHealthQuery } from './features/health/healthApi';
@@ -386,6 +391,9 @@ function CatalogTab({ storeId }: { storeId: string }) {
   const [createCategory, { isLoading: creating }] = useCreateCatalogCategoryMutation();
   const [updateCategory, { isLoading: updating }] = useUpdateCatalogCategoryMutation();
   const [reorderCategories, { isLoading: reordering }] = useReorderCatalogCategoriesMutation();
+  const [createPlacement, { isLoading: creatingPlacement }] = useCreateCatalogPlacementMutation();
+  const [movePlacement, { isLoading: movingPlacement }] = useMoveCatalogPlacementMutation();
+  const [reorderPlacements, { isLoading: reorderingPlacements }] = useReorderCatalogPlacementsMutation();
   const [rootForm, setRootForm] = useState<CategoryFormState>(emptyCategoryForm());
   const [childParentId, setChildParentId] = useState<string | null>(null);
   const [childForm, setChildForm] = useState<CategoryFormState>(emptyCategoryForm());
@@ -393,9 +401,34 @@ function CatalogTab({ storeId }: { storeId: string }) {
   const [editForm, setEditForm] = useState<CategoryFormState>(emptyCategoryForm());
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState('');
   const categories = data?.categories ?? [];
   const flatCategories = useMemo(() => flattenCategories(categories), [categories]);
+  const activeCategoryOptions = useMemo(
+    () => flatCategories.filter((category) => category.status === 'active' && category.canAcceptActivePlacements),
+    [flatCategories],
+  );
+  const selectedCategory = activeCategoryOptions.find((category) => category.id === selectedCategoryId) ?? null;
+  const { data: placementsData, error: placementsError, isLoading: placementsLoading, isFetching: placementsFetching } = useListCatalogPlacementsQuery(
+    { storeId, categoryId: selectedCategoryId, status: 'active' },
+    { skip: !selectedCategoryId },
+  );
+  const placements = useMemo(
+    () => [...(placementsData?.placements ?? [])].sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt)),
+    [placementsData?.placements],
+  );
+  const { data: productsData, isFetching: productsFetching } = useListProductsQuery({
+    search: productSearch.trim() || undefined,
+    status: 'active',
+    take: 10,
+  });
+  const selectableProducts = (productsData?.products ?? []).filter((product) => product.status === 'active' && !product.unavailableForNewActivePlacements);
+  const selectedProduct = selectableProducts.find((product) => product.id === selectedProductId) ?? null;
+  const placementBusy = creatingPlacement || movingPlacement || reorderingPlacements;
   const errorMessage = error && 'message' in error ? error.message : null;
+  const placementsErrorMessage = placementsError && 'message' in placementsError ? placementsError.message : null;
 
   async function getCsrfOrThrow() {
     const csrfData = csrf ?? (await refetchCsrf()).data;
@@ -519,6 +552,97 @@ function CatalogTab({ storeId }: { storeId: string }) {
     }
   }
 
+
+  useEffect(() => {
+    if (!selectedCategoryId && activeCategoryOptions.length > 0) {
+      setSelectedCategoryId(activeCategoryOptions[0].id);
+      return;
+    }
+    if (selectedCategoryId && !activeCategoryOptions.some((category) => category.id === selectedCategoryId)) {
+      setSelectedCategoryId(activeCategoryOptions[0]?.id ?? '');
+    }
+  }, [activeCategoryOptions, selectedCategoryId]);
+
+  async function handleAddPlacement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setActionError(null);
+    setActionNotice(null);
+    if (!selectedCategory) {
+      setActionError('Choose an active category that can accept placements.');
+      return;
+    }
+    if (!selectedProduct) {
+      setActionError('Choose an active product from the master catalog.');
+      return;
+    }
+
+    try {
+      const csrfData = await getCsrfOrThrow();
+      await createPlacement({
+        storeId,
+        categoryId: selectedCategory.id,
+        productId: selectedProduct.id,
+        sortOrder: placements.length,
+        status: 'active',
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setSelectedProductId('');
+      setActionNotice(`${selectedProduct.name} added to ${selectedCategory.name}.`);
+    } catch (error) {
+      const existingPlacement = existingPlacementFromError(error);
+      if (existingPlacement) {
+        const confirmed = window.confirm(
+          `This product is already actively placed in ${existingPlacement.category?.name ?? 'another category'}. Move it to ${selectedCategory.name}?`,
+        );
+        if (!confirmed) {
+          setActionError(errorMessageFromUnknown(error, 'Product already has an active placement in this catalog.'));
+          return;
+        }
+        try {
+          const csrfData = await getCsrfOrThrow();
+          await movePlacement({
+            storeId,
+            placementId: existingPlacement.id,
+            categoryId: selectedCategory.id,
+            sortOrder: placements.length,
+            csrfToken: csrfData.csrfToken,
+            csrfHeaderName: csrfData.headerName,
+          }).unwrap();
+          setSelectedProductId('');
+          setActionNotice(`${selectedProduct.name} moved to ${selectedCategory.name}.`);
+        } catch (moveError) {
+          setActionError(errorMessageFromUnknown(moveError, 'Product placement could not be moved.'));
+        }
+        return;
+      }
+      setActionError(errorMessageFromUnknown(error, 'Product placement could not be created.'));
+    }
+  }
+
+  async function moveProductPlacement(placement: CatalogProductPlacement, direction: -1 | 1) {
+    const currentIndex = placements.findIndex((item) => item.id === placement.id);
+    const nextIndex = currentIndex + direction;
+    if (!selectedCategoryId || currentIndex < 0 || nextIndex < 0 || nextIndex >= placements.length) return;
+    const nextIds = placements.map((item) => item.id);
+    [nextIds[currentIndex], nextIds[nextIndex]] = [nextIds[nextIndex], nextIds[currentIndex]];
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const csrfData = await getCsrfOrThrow();
+      await reorderPlacements({
+        storeId,
+        categoryId: selectedCategoryId,
+        placementIds: nextIds,
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setActionNotice('Product order updated.');
+    } catch (error) {
+      setActionError(errorMessageFromUnknown(error, 'Product order could not be updated.'));
+    }
+  }
+
   return (
     <section className="catalog-tab" aria-labelledby="catalog-title">
       <div className="panel-heading catalog-heading">
@@ -548,6 +672,78 @@ function CatalogTab({ storeId }: { storeId: string }) {
       <div className="status status-warning category-archive-warning">
         Archiving warning: categories with status archived or inactive cannot accept active product placements. If active products are already placed here, validation/publishing can be blocked until placements are moved or deactivated.
       </div>
+
+      <section className="placement-panel" aria-labelledby="placements-title">
+        <div className="panel-heading placement-heading">
+          <div>
+            <p className="eyebrow">Product placements</p>
+            <h4 id="placements-title">Products in selected category</h4>
+            <p className="muted">Search active master products, add them to active categories, and reorder by sortOrder.</p>
+          </div>
+          {placementsFetching && <span className="muted">Refreshing placements…</span>}
+        </div>
+
+        <form className="placement-form" onSubmit={handleAddPlacement}>
+          <label>
+            Category
+            <select value={selectedCategoryId} onChange={(event) => setSelectedCategoryId(event.target.value)} disabled={placementBusy || activeCategoryOptions.length === 0}>
+              {activeCategoryOptions.length === 0 && <option value="">No active categories available</option>}
+              {activeCategoryOptions.map((category) => (
+                <option key={category.id} value={category.id}>{category.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Search product
+            <input
+              value={productSearch}
+              onChange={(event) => {
+                setProductSearch(event.target.value);
+                setSelectedProductId('');
+              }}
+              placeholder="Name, PLU, barcode or SKU"
+            />
+          </label>
+          <label>
+            Product
+            <select value={selectedProductId} onChange={(event) => setSelectedProductId(event.target.value)} disabled={placementBusy || selectableProducts.length === 0}>
+              <option value="">{productsFetching ? 'Searching…' : 'Choose active product'}</option>
+              {selectableProducts.map((product) => (
+                <option key={product.id} value={product.id}>{product.defaultPluCode} · {product.name}</option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" disabled={placementBusy || !selectedCategory || !selectedProduct}>
+            {creatingPlacement || movingPlacement ? 'Saving placement…' : 'Add to category'}
+          </button>
+        </form>
+        <p className="muted">Archived/inactive products and archived/inactive categories are intentionally unavailable for active placements.</p>
+
+        {placementsErrorMessage && <div className="form-error" role="alert">{placementsErrorMessage}</div>}
+        {placementsLoading && <div className="status status-loading">Loading category products...</div>}
+        {!selectedCategoryId && <div className="empty-state">Create or activate a category before adding products.</div>}
+        {selectedCategoryId && !placementsLoading && placements.length === 0 && <div className="empty-state">No active products in this category yet.</div>}
+        {placements.length > 0 && (
+          <ul className="placement-list">
+            {placements.map((placement, index) => (
+              <li key={placement.id} className="placement-card">
+                <div>
+                  <strong>{placement.product?.name ?? placement.productId}</strong>
+                  <p className="muted">
+                    PLU {placement.product?.defaultPluCode ?? '—'} · Order: {placement.sortOrder} · <span className={`badge badge-${placement.status}`}>{placement.status}</span>
+                  </p>
+                  {placement.product?.status !== 'active' && <span className="price-warning">Product is no longer active</span>}
+                </div>
+                <div className="category-actions">
+                  <button className="secondary-button" type="button" onClick={() => moveProductPlacement(placement, -1)} disabled={placementBusy || index === 0}>↑</button>
+                  <button className="secondary-button" type="button" onClick={() => moveProductPlacement(placement, 1)} disabled={placementBusy || index === placements.length - 1}>↓</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       {actionNotice && <div className="status status-ok" role="status">{actionNotice}</div>}
       {actionError && <div className="form-error" role="alert">{actionError}</div>}
       {isLoading && <div className="status status-loading">Loading active catalog categories...</div>}
@@ -577,6 +773,8 @@ function CatalogTab({ storeId }: { storeId: string }) {
             onCancelEdit={() => setEditingId(null)}
             onEditFormChange={setEditForm}
             onUpdate={handleUpdate}
+            selectedCategoryId={selectedCategoryId}
+            onSelectCategory={(category) => setSelectedCategoryId(category.id)}
             onMove={moveCategory}
           />
         </div>
@@ -602,6 +800,8 @@ function CategoryTreeList({
   onEditFormChange,
   onUpdate,
   onMove,
+  selectedCategoryId,
+  onSelectCategory,
 }: {
   categories: CatalogCategory[];
   allCategories: CatalogCategory[];
@@ -619,6 +819,8 @@ function CategoryTreeList({
   onEditFormChange: (form: CategoryFormState) => void;
   onUpdate: (category: CatalogCategory, event: FormEvent<HTMLFormElement>) => void;
   onMove: (category: CatalogCategory, siblings: CatalogCategory[], direction: -1 | 1) => void;
+  selectedCategoryId: string;
+  onSelectCategory: (category: CatalogCategory) => void;
 }) {
   return (
     <ul className="category-list">
@@ -648,6 +850,7 @@ function CategoryTreeList({
                   <div className="category-actions">
                     <button className="secondary-button" type="button" onClick={() => onMove(category, categories, -1)} disabled={busy || index === 0}>↑</button>
                     <button className="secondary-button" type="button" onClick={() => onMove(category, categories, 1)} disabled={busy || index === categories.length - 1}>↓</button>
+                    <button className="secondary-button" type="button" onClick={() => onSelectCategory(category)} disabled={busy || !category.canAcceptActivePlacements || category.status !== 'active'}>{selectedCategoryId === category.id ? 'Selected' : 'Manage products'}</button>
                     <button className="secondary-button" type="button" onClick={() => onAddChild(category)} disabled={busy}>Add child</button>
                     <button type="button" onClick={() => onEdit(category)} disabled={busy}>Edit</button>
                   </div>
@@ -682,6 +885,8 @@ function CategoryTreeList({
               onEditFormChange={onEditFormChange}
               onUpdate={onUpdate}
               onMove={onMove}
+              selectedCategoryId={selectedCategoryId}
+              onSelectCategory={onSelectCategory}
             />
           )}
         </li>
@@ -756,6 +961,21 @@ function collectDescendantIds(category: CatalogCategory): Set<string> {
 
 function errorMessageFromUnknown(error: unknown, fallback: string) {
   return error && typeof error === 'object' && 'message' in error ? String(error.message) : fallback;
+}
+
+function existingPlacementFromError(error: unknown): CatalogProductPlacement | null {
+  if (!error || typeof error !== 'object' || !('data' in error)) {
+    return null;
+  }
+  const data = (error as { data?: { code?: string; moveRequired?: boolean; existingPlacement?: unknown } }).data;
+  if (data?.code !== 'ACTIVE_PLACEMENT_EXISTS' || data.moveRequired !== true) {
+    return null;
+  }
+  const placement = data.existingPlacement;
+  if (!placement || typeof placement !== 'object' || !('id' in placement)) {
+    return null;
+  }
+  return placement as CatalogProductPlacement;
 }
 
 function ScaleDevicesTab({ storeId, userRole, currentVersionId }: { storeId: string; userRole: AuthUser['role']; currentVersionId: string | null }) {
