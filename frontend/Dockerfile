@@ -17,5 +17,6 @@ ENV NODE_ENV=production
 COPY package*.json ./
 RUN npm install --omit=dev
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/vite.config.ts ./vite.config.ts
 EXPOSE 5173
-CMD ["npm", "run", "preview", "--", "--port", "5173"]
+CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "5173"]
