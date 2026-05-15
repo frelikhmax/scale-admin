@@ -1,8 +1,10 @@
-import { Body, Controller, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RequireRoles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { SessionGuard } from '../auth/session.guard';
+import { RequireStoreAccess } from '../auth/store-access.decorator';
+import { StoreAccessGuard } from '../auth/store-access.guard';
 import { getHeader } from '../auth/cookie.util';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { ScalesService } from './scales.service';
@@ -19,12 +21,19 @@ type UpdateDeviceStatusBody = {
 };
 
 @Controller()
-@UseGuards(SessionGuard, RolesGuard)
-@RequireRoles('admin')
+@UseGuards(SessionGuard, RolesGuard, StoreAccessGuard)
 export class ScalesController {
   constructor(private readonly scalesService: ScalesService) {}
 
+  @Get('stores/:storeId/scales')
+  @RequireRoles('admin', 'operator')
+  @RequireStoreAccess('storeId', 'params')
+  listStoreDevices(@Param('storeId') storeId: string) {
+    return this.scalesService.listStoreDevices(storeId);
+  }
+
   @Post('stores/:storeId/scales')
+  @RequireRoles('admin')
   registerDevice(
     @Param('storeId') storeId: string,
     @Body() body: RegisterDeviceBody,
@@ -45,6 +54,7 @@ export class ScalesController {
   }
 
   @Patch('scales/:deviceId/status')
+  @RequireRoles('admin')
   updateDeviceStatus(
     @Param('deviceId') deviceId: string,
     @Body() body: UpdateDeviceStatusBody,
@@ -60,6 +70,7 @@ export class ScalesController {
   }
 
   @Post('scales/:deviceId/regenerate-token')
+  @RequireRoles('admin')
   regenerateApiToken(@Param('deviceId') deviceId: string, @Req() request: any, @CurrentUser() user: AuthenticatedUser) {
     return this.scalesService.regenerateApiToken(deviceId, user.id, this.getRequestContext(request));
   }
