@@ -1566,3 +1566,34 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-042`.
+
+## 2026-05-15T14:53:16+02:00 — TASK-043 — Admin Dashboard aggregation API
+
+Status: done
+Owner: backend (manager-bound subagent)
+Summary:
+- Backend implemented admin-only Admin Dashboard aggregation API at `GET /api/admin/dashboard` in commit `5167164 TASK-043 implement admin dashboard aggregation API`.
+- Added Dashboard module/controller/service and registered it in the backend app module.
+- API returns store and scale-device counts, devices with latest sync errors, devices without synchronization/outdated catalog version, latest published versions, latest sync errors, and problematic scale devices.
+- Endpoint is protected by existing session and roles guards with `RequireRoles('admin')`; operator access returns 403.
+- Dashboard responses avoid secret fields and redact token/password-like text in sync error messages.
+- Manager verified code scope, source-level acceptance criteria, backend build, Prisma validation, whitespace checks, and deterministic Docker verification.
+- Marked TASK-043 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `5167164 TASK-043 implement admin dashboard aggregation API`.
+- Changed files inspected: `backend/src/app.module.ts`, `backend/src/dashboard/dashboard.controller.ts`, `backend/src/dashboard/dashboard.module.ts`, `backend/src/dashboard/dashboard.service.ts`.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Backend build: `npm --prefix backend run build` passed.
+- Prisma validate: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Source/access checks confirmed `GET /api/admin/dashboard`, `SessionGuard`, `RolesGuard`, `RequireRoles('admin')`, no `apiTokenHash` response usage, and secret-message redaction.
+- Backend subagent reported focused API/service verification: `FOCUSED_DASHBOARD_VERIFICATION=PASS` for admin aggregation, secret redaction, and operator 403.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-043` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-043`.

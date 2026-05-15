@@ -3,6 +3,7 @@ import { AdvertisingModule } from './advertising/advertising.module';
 import { AppConfigModule } from './config/config.module';
 import { AuthModule } from './auth/auth.module';
 import { CatalogModule } from './catalog/catalog.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { EmailModule } from './email/email.module';
 import { FilesModule } from './files/files.module';
 import { HealthController } from './health.controller';
@@ -24,6 +25,7 @@ import { UsersModule } from './users/users.module';
     StoresModule,
     ProductsModule,
     CatalogModule,
+    DashboardModule,
     PricesModule,
     AdvertisingModule,
     PublishingModule,
