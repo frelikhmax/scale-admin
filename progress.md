@@ -1328,3 +1328,33 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-015`.
+
+
+## 2026-05-15T12:34:07+02:00 — TASK-020 — Scale Devices tab
+
+Status: done
+Owner: frontend
+Summary:
+- Frontend implemented Store Details → Scale Devices section in commit `bc9b4ab TASK-020 Scale Devices tab`.
+- Admin can view scale device fields, register devices, block devices and regenerate one-time API tokens.
+- Operator sees simplified device status only and no admin controls.
+- Added a minimal backend list endpoint under scales with store-access guard for the UI.
+- Manager inspected handoff, lock, audit, branch state and changed files; changes are scoped to TASK-020.
+- Marked TASK-020 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `bc9b4ab TASK-020 Scale Devices tab`.
+- Changed files inspected: `backend/src/scales/scales.controller.ts`, `backend/src/scales/scales.service.ts`, `frontend/src/features/scales/scalesApi.ts`, `frontend/src/main.tsx`, `frontend/src/shared/api/backendApi.ts`, `frontend/src/styles.css`.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Frontend typecheck: `cd frontend && npm exec tsc -- -b` passed.
+- Frontend build: `npm --prefix frontend run build` passed.
+- Backend build: `npm --prefix backend run build` passed.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-020` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-020`.
