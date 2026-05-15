@@ -1002,3 +1002,34 @@ Notes:
 
 Next:
 - Merge task branch to `main`, push `main` and the task branch, then run `scripts/openclaw-after-task-check.sh TASK-027`.
+
+## 2026-05-15 08:54 — TASK-028 — Prices tab UI
+
+Status: done
+Owner: frontend
+Summary:
+- Frontend implemented TASK-028 in commit `22e06e8 TASK-028 implement prices tab UI` without marking `tasks.json` done.
+- Added RTK Query Prices API integration for listing active-catalog store prices and saving inline product prices with CSRF protection.
+- Added Store Details -> Prices section with product price table, search, category filter, missing-price/priced filter, inline editing, and refresh action.
+- Added required columns: Product name, Short name, PLU, SKU/barcode, Category, Current price, Unit, Status and UpdatedAt.
+- Highlighted products with missing prices and invalid price input/saved values.
+- Manager verified implementation scope, source-level acceptance criteria, frontend build/typecheck, whitespace check, and deterministic Docker verification.
+- Marked TASK-028 `status` as `done` after manager verification and Docker verification passed.
+- Released `.openclaw/locks/TASK-028.lock`.
+
+Evidence:
+- Coordination commit: `748b36f chore: assign TASK-028 prices tab ui`.
+- Implementation commit inspected: `22e06e8 TASK-028 implement prices tab UI`.
+- Changed implementation files: `frontend/src/features/prices/pricesApi.ts`, `frontend/src/main.tsx`, `frontend/src/shared/api/backendApi.ts`, `frontend/src/styles.css`.
+- Frontend build: `npm --prefix frontend run build` passed.
+- Explicit typecheck: `cd frontend && npm exec tsc -- -b` passed.
+- Whitespace check: `git diff --check 748b36f..HEAD` passed.
+- Source acceptance checks confirmed Prices tab labels, filters, API paths, missing price handling, invalid price handling and CSRF mutation headers.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-028` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- The first attempted explicit typecheck command from repo root (`npm --prefix frontend exec tsc -- -b`) looked for a root `tsconfig.json`; the correct frontend-dir command passed, and `npm --prefix frontend run build` had already run `tsc -b` successfully.
+
+Next:
+- Merge task branch to `main`, push `main` and the task branch, then run `scripts/openclaw-after-task-check.sh TASK-028`.

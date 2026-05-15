@@ -1,4 +1,4 @@
-import { type FormEvent, StrictMode, useState } from 'react';
+import { type FormEvent, StrictMode, useMemo, useState } from 'react';
 import { Provider } from 'react-redux';
 import { createRoot } from 'react-dom/client';
 import { store } from './app/store';
@@ -10,6 +10,11 @@ import {
   type AuthUser,
 } from './features/auth/authApi';
 import { useGetHealthQuery } from './features/health/healthApi';
+import {
+  useListStorePricesQuery,
+  useUpdateStoreProductPriceMutation,
+  type PriceRow,
+} from './features/prices/pricesApi';
 import {
   useCreateStoreMutation,
   useGetStoreQuery,
@@ -277,9 +282,190 @@ function StoreDetails({ user, storeId, onNavigate }: { user: AuthUser; storeId: 
             <div><dt>Created</dt><dd>{new Date(store.createdAt).toLocaleString()}</dd></div>
             <div><dt>Updated</dt><dd>{new Date(store.updatedAt).toLocaleString()}</dd></div>
           </dl>
+          <PricesTab storeId={store.id} />
         </>
       )}
     </section>
+  );
+}
+
+function PricesTab({ storeId }: { storeId: string }) {
+  const [search, setSearch] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [missingPrice, setMissingPrice] = useState<'all' | 'missing' | 'priced'>('all');
+  const missingPriceFilter = missingPrice === 'all' ? '' : missingPrice === 'missing';
+  const { data, error, isLoading, isFetching, refetch } = useListStorePricesQuery({
+    storeId,
+    search,
+    categoryId,
+    missingPrice: missingPriceFilter,
+  });
+  const { data: unfilteredData } = useListStorePricesQuery({ storeId });
+  const prices = data?.prices ?? [];
+  const categoryOptions = useMemo(() => {
+    const byId = new Map<string, PriceRow['category']>();
+    for (const row of unfilteredData?.prices ?? prices) {
+      byId.set(row.category.id, row.category);
+    }
+    return [...byId.values()].sort((first, second) => first.name.localeCompare(second.name));
+  }, [prices, unfilteredData?.prices]);
+  const errorMessage = error && 'message' in error ? error.message : null;
+
+  return (
+    <section className="prices-tab" aria-labelledby="prices-title">
+      <div className="panel-heading prices-heading">
+        <div>
+          <p className="eyebrow">Prices tab</p>
+          <h3 id="prices-title">Store product prices</h3>
+          <p className="muted">Products from the active catalog for this store.</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? 'Refreshing...' : 'Refresh prices'}
+        </button>
+      </div>
+
+      <div className="price-filters">
+        <label>
+          Search
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Name, short name, PLU, SKU or barcode"
+          />
+        </label>
+        <label>
+          Category
+          <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+            <option value="">All categories</option>
+            {categoryOptions.map((category) => (
+              <option key={category.id} value={category.id}>{category.name}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Price status
+          <select value={missingPrice} onChange={(event) => setMissingPrice(event.target.value as 'all' | 'missing' | 'priced')}>
+            <option value="all">All products</option>
+            <option value="missing">Missing price only</option>
+            <option value="priced">With price only</option>
+          </select>
+        </label>
+      </div>
+
+      {isLoading && <div className="status status-loading">Loading active catalog prices...</div>}
+      {errorMessage && <div className="form-error" role="alert">{errorMessage}</div>}
+      {!isLoading && !errorMessage && prices.length === 0 && <div className="empty-state">No products match these price filters.</div>}
+      {prices.length > 0 && (
+        <div className="price-table-wrap">
+          <table className="price-table">
+            <thead>
+              <tr>
+                <th>Product name</th>
+                <th>Short name</th>
+                <th>PLU</th>
+                <th>SKU/barcode</th>
+                <th>Category</th>
+                <th>Current price</th>
+                <th>Unit</th>
+                <th>Status</th>
+                <th>UpdatedAt</th>
+              </tr>
+            </thead>
+            <tbody>
+              {prices.map((row) => (
+                <PriceTableRow key={row.placement.id} row={row} storeId={storeId} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PriceTableRow({ row, storeId }: { row: PriceRow; storeId: string }) {
+  const currentPriceValue = row.currentPrice?.price ?? '';
+  const [priceValue, setPriceValue] = useState(currentPriceValue);
+  const [rowError, setRowError] = useState<string | null>(null);
+  const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
+  const [updatePrice, { isLoading }] = useUpdateStoreProductPriceMutation();
+  const numericPrice = Number(priceValue);
+  const currentPriceNumber = Number(row.currentPrice?.price);
+  const hasInvalidSavedPrice = Boolean(row.currentPrice) && (!Number.isFinite(currentPriceNumber) || currentPriceNumber <= 0);
+  const hasInvalidPrice = priceValue.trim() !== '' && (!Number.isFinite(numericPrice) || numericPrice <= 0);
+  const isDirty = priceValue.trim() !== currentPriceValue;
+  const rowClassName = [
+    'price-row',
+    row.missingPrice ? 'price-row-missing' : '',
+    hasInvalidPrice || hasInvalidSavedPrice ? 'price-row-invalid' : '',
+  ].filter(Boolean).join(' ');
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setRowError(null);
+
+    if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+      setRowError('Enter a price greater than 0.');
+      return;
+    }
+
+    const csrfData = csrf ?? (await refetchCsrf()).data;
+    if (!csrfData) {
+      setRowError('Не удалось подготовить защищённую форму. Повторите попытку.');
+      return;
+    }
+
+    try {
+      const response = await updatePrice({
+        storeId,
+        productId: row.product.id,
+        price: numericPrice,
+        currency: row.currentPrice?.currency ?? 'RUB',
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setPriceValue(response.price.price);
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : 'Price could not be saved.';
+      setRowError(message);
+    }
+  }
+
+  return (
+    <tr className={rowClassName}>
+      <td>
+        <strong>{row.product.name}</strong>
+        {row.missingPrice && <span className="price-warning">No price</span>}
+        {(hasInvalidPrice || hasInvalidSavedPrice) && <span className="price-warning">Invalid price</span>}
+      </td>
+      <td>{row.product.shortName}</td>
+      <td>{row.product.defaultPluCode}</td>
+      <td>{[row.product.sku, row.product.barcode].filter(Boolean).join(' / ') || '—'}</td>
+      <td>{row.category.name}</td>
+      <td>
+        <form className="inline-price-form" onSubmit={handleSubmit}>
+          <input
+            aria-label={`Price for ${row.product.name}`}
+            inputMode="decimal"
+            min="0.01"
+            onChange={(event) => setPriceValue(event.target.value)}
+            placeholder="0.00"
+            step="0.01"
+            type="number"
+            value={priceValue}
+          />
+          <button type="submit" disabled={isLoading || hasInvalidPrice || !isDirty}>
+            {isLoading ? 'Saving...' : 'Save'}
+          </button>
+        </form>
+        {rowError && <div className="inline-error" role="alert">{rowError}</div>}
+      </td>
+      <td>{row.product.unit}</td>
+      <td><span className={`badge badge-${row.product.status}`}>{row.product.status}</span></td>
+      <td>{row.currentPrice ? new Date(row.currentPrice.updatedAt).toLocaleString() : '—'}</td>
+    </tr>
   );
 }
 
