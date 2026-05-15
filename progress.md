@@ -1447,3 +1447,32 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-024`.
+
+## 2026-05-15T14:05:00+02:00 — TASK-026 — Catalog product placement UI
+
+Status: done
+Owner: frontend (manager-bound subagent)
+Summary:
+- Added Store Details → Catalog product placement management UI.
+- Added product search/add flow for active master products and active categories that accept placements.
+- Added active placement display inside selected categories sorted by `sortOrder`.
+- Added duplicate active-placement move confirmation and move action.
+- Added reorder controls for products within a category.
+- Added Catalog placement RTK Query hooks with CSRF mutation headers and cache invalidation.
+- Marked TASK-026 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `1d9c888 TASK-026 add catalog placement UI`.
+- Changed files inspected: `frontend/src/features/catalog/catalogApi.ts`, `frontend/src/main.tsx`, `frontend/src/shared/api/backendApi.ts`, `frontend/src/styles.css`.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Frontend build: `npm --prefix frontend run build` passed.
+- Frontend typecheck: `cd frontend && npm exec tsc -- -b` passed.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-026` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-026`.
