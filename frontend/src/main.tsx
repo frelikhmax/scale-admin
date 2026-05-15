@@ -1,4 +1,4 @@
-import { type FormEvent, StrictMode, useEffect, useMemo, useState } from 'react';
+import { type ChangeEvent, type FormEvent, StrictMode, useEffect, useMemo, useState } from 'react';
 import { Provider } from 'react-redux';
 import { createRoot } from 'react-dom/client';
 import { store } from './app/store';
@@ -33,6 +33,7 @@ import {
   useGetProductQuery,
   useListProductsQuery,
   useUpdateProductMutation,
+  useUploadProductImageMutation,
   type Product,
   type ProductFormValues,
   type ProductStatus,
@@ -1685,22 +1686,70 @@ function ProductForm({ mode, product, onCancel, onSaved }: { mode: 'create' | 'e
     shortName: product?.shortName ?? '',
     description: product?.description ?? '',
     imageUrl: product?.imageUrl ?? '',
+    imageFileAssetId: product?.imageFileAssetId ?? '',
     barcode: product?.barcode ?? '',
     sku: product?.sku ?? '',
     unit: product?.unit ?? 'kg',
     status: product?.status ?? 'active',
   });
   const [formError, setFormError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [warning, setWarning] = useState<ProductWarning | null>(null);
   const [savedProduct, setSavedProduct] = useState<Product | null>(null);
   const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
   const [createProduct, { isLoading: creating }] = useCreateProductMutation();
   const [updateProduct, { isLoading: updating }] = useUpdateProductMutation();
+  const [uploadProductImage, { isLoading: uploadingImage }] = useUploadProductImageMutation();
   const isSaving = creating || updating;
   const existingPlacementCount = product?.activePlacementCount ?? 0;
 
   function updateValue(field: keyof ProductFormValues, value: string) {
     setValues((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    setUploadError(null);
+    setUploadNotice(null);
+
+    if (!file) {
+      return;
+    }
+
+    const filename = file.name.toLowerCase();
+    if (filename.endsWith('.gif') || file.type === 'image/gif') {
+      setUploadError('GIF images are not supported. Upload JPG, PNG or WebP.');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setUploadError('Image file is too large. Upload an image up to 2 MB.');
+      return;
+    }
+
+    const csrfData = csrf ?? (await refetchCsrf()).data;
+    if (!csrfData) {
+      setUploadError('Не удалось подготовить защищённую загрузку. Повторите попытку.');
+      return;
+    }
+
+    try {
+      const response = await uploadProductImage({
+        file,
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setValues((current) => ({
+        ...current,
+        imageUrl: response.fileAsset.publicUrl,
+        imageFileAssetId: response.fileAsset.id,
+      }));
+      setUploadNotice(`Uploaded ${response.fileAsset.originalFileName}. Save the product to persist the image URL.`);
+    } catch (error) {
+      setUploadError(errorMessageFromUnknown(error, 'Image could not be uploaded.'));
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1726,6 +1775,7 @@ function ProductForm({ mode, product, onCancel, onSaved }: { mode: 'create' | 'e
       shortName: values.shortName.trim(),
       description: values.description?.trim() || undefined,
       imageUrl: values.imageUrl?.trim() || undefined,
+      imageFileAssetId: values.imageFileAssetId?.trim() || undefined,
       barcode: values.barcode?.trim() || undefined,
       sku: values.sku?.trim() || undefined,
       unit: values.unit,
@@ -1784,6 +1834,25 @@ function ProductForm({ mode, product, onCancel, onSaved }: { mode: 'create' | 'e
           <label>Image URL<input value={values.imageUrl ?? ''} onChange={(event) => updateValue('imageUrl', event.target.value)} placeholder="Optional image URL" /></label>
         </div>
         <label>Description<input value={values.description ?? ''} onChange={(event) => updateValue('description', event.target.value)} placeholder="Optional description" /></label>
+        <div className="product-image-upload">
+          <label>
+            Product image upload
+            <input accept="image/png,image/jpeg,image/webp" disabled={uploadingImage || isSaving} onChange={handleImageUpload} type="file" />
+          </label>
+          <p className="muted">Upload JPG, PNG or WebP up to 2 MB. The uploaded public URL is saved to Image URL when you save the product.</p>
+          {values.imageUrl && (
+            <div className="product-image-preview">
+              <img src={values.imageUrl} alt="Selected product" />
+              <div>
+                <strong>Selected image</strong>
+                <small>{values.imageUrl}</small>
+              </div>
+            </div>
+          )}
+          {uploadingImage && <div className="status status-loading">Uploading image...</div>}
+          {uploadNotice && <div className="status status-ok" role="status">{uploadNotice}</div>}
+          {uploadError && <div className="form-error" role="alert">{uploadError}</div>}
+        </div>
 
         {formError && <div className="form-error" role="alert">{formError}</div>}
         <div className="action-row">
