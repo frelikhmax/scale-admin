@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../logs/audit-log.service';
 
 export type RequestContext = {
   ipAddress?: string;
@@ -47,7 +48,10 @@ type ProductRecord = {
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogs: AuditLogService,
+  ) {}
 
   async listProducts(input: ListProductsInput) {
     const search = this.normalizeOptionalString(input.search);
@@ -115,7 +119,7 @@ export class ProductsService {
     try {
       const product = await this.prisma.$transaction(async (tx) => {
         const created = await tx.product.create({ data });
-        await tx.auditLog.create({
+        await this.auditLogs.create(tx, {
           data: {
             actorUserId,
             action: 'product.created',
@@ -188,7 +192,7 @@ export class ProductsService {
           data,
         });
 
-        await tx.auditLog.create({
+        await this.auditLogs.create(tx, {
           data: {
             actorUserId,
             action: 'product.updated',

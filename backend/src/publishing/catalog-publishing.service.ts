@@ -3,6 +3,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../logs/audit-log.service';
 import type { RequestContext } from '../catalog/catalog.service';
 import { CatalogPackageData, CatalogPackageService } from './catalog-package.service';
 import { CatalogValidationService } from './catalog-validation.service';
@@ -16,6 +17,7 @@ export type PublishCatalogOptions = {
 export class CatalogPublishingService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly auditLogs: AuditLogService,
     private readonly catalogValidationService: CatalogValidationService,
     private readonly catalogPackageService: CatalogPackageService,
   ) {}
@@ -109,7 +111,7 @@ export class CatalogPublishingService {
           data: { currentVersionId: createdVersion.id },
         });
 
-        await tx.auditLog.create({
+        await this.auditLogs.create(tx, {
           data: {
             actorUserId: actorUser?.id,
             action: 'catalog_version.published',

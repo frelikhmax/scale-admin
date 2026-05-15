@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { BannerStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../logs/audit-log.service';
 
 export type RequestContext = {
   ipAddress?: string;
@@ -46,7 +47,10 @@ type BannerRecord = {
 
 @Injectable()
 export class AdvertisingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogs: AuditLogService,
+  ) {}
 
   async listBanners(storeId: string, input: ListBannersInput = {}) {
     const status = input.status ? this.requireBannerStatus(input.status) : undefined;
@@ -74,7 +78,7 @@ export class AdvertisingService {
 
     const created = await this.prisma.$transaction(async (tx) => {
       const banner = await tx.advertisingBanner.create({ data });
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'advertising_banner.created',
@@ -124,7 +128,7 @@ export class AdvertisingService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const banner = await tx.advertisingBanner.update({ where: { id: existing.id }, data });
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action,
@@ -181,7 +185,7 @@ export class AdvertisingService {
         });
         banners.push(banner);
       }
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'advertising_banner.reordered',

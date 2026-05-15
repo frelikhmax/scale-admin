@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PriceStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../logs/audit-log.service';
 
 export type RequestContext = {
   ipAddress?: string;
@@ -39,7 +40,10 @@ type StoreProductPriceRecord = {
 
 @Injectable()
 export class PricesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogs: AuditLogService,
+  ) {}
 
   async listStorePrices(storeId: string, input: ListStorePricesInput) {
     const catalog = await this.findActiveCatalog(storeId);
@@ -179,7 +183,7 @@ export class PricesService {
         await tx.storeProductPrice.updateMany({ where: { id: { in: duplicateIds } }, data: { status: 'archived' } });
       }
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: primary ? 'price.updated' : 'price.created',
