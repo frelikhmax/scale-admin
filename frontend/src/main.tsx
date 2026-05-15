@@ -16,6 +16,17 @@ import {
   type PriceRow,
 } from './features/prices/pricesApi';
 import {
+  useCreateProductMutation,
+  useGetProductQuery,
+  useListProductsQuery,
+  useUpdateProductMutation,
+  type Product,
+  type ProductFormValues,
+  type ProductStatus,
+  type ProductUnit,
+  type ProductWarning,
+} from './features/products/productsApi';
+import {
   useGetCatalogVersionsQuery,
   usePublishCatalogMutation,
   useValidateCatalogMutation,
@@ -60,6 +71,9 @@ type DashboardView =
   | { name: 'store-details'; storeId: string }
   | { name: 'store-create' }
   | { name: 'store-edit'; storeId: string }
+  | { name: 'products' }
+  | { name: 'product-create' }
+  | { name: 'product-edit'; productId: string }
   | { name: 'users-access' };
 
 function HealthStatus() {
@@ -187,6 +201,7 @@ function LoginScreen() {
 
 function Navigation({ user, activeView, onNavigate }: { user: AuthUser; activeView: DashboardView; onNavigate: (view: DashboardView) => void }) {
   const storesActive = activeView.name.startsWith('store');
+  const productsActive = activeView.name.startsWith('product');
 
   return (
     <nav className="app-nav" aria-label="Primary navigation">
@@ -203,6 +218,13 @@ function Navigation({ user, activeView, onNavigate }: { user: AuthUser; activeVi
         onClick={() => onNavigate({ name: 'stores' })}
       >
         Stores
+      </button>
+      <button
+        className={productsActive ? 'nav-button nav-button-active' : 'nav-button'}
+        type="button"
+        onClick={() => onNavigate({ name: 'products' })}
+      >
+        Products
       </button>
       {user.role === 'admin' ? (
         <>
@@ -943,6 +965,236 @@ function PriceTableRow({ row, storeId }: { row: PriceRow; storeId: string }) {
   );
 }
 
+
+function ProductsPage({ onNavigate }: { onNavigate: (view: DashboardView) => void }) {
+  const [searchDraft, setSearchDraft] = useState('');
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState<ProductStatus | 'all'>('all');
+  const { data, error, isLoading, isFetching, refetch } = useListProductsQuery({ search, status, take: 100 });
+  const products = data?.products ?? [];
+  const errorMessage = error && 'message' in error ? error.message : null;
+
+  function handleSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSearch(searchDraft.trim());
+  }
+
+  return (
+    <section className="panel" aria-labelledby="products-title">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">Products</p>
+          <h2 id="products-title">Product catalog</h2>
+          <p className="muted">Search and manage PLU-backed products available to catalogs and prices.</p>
+        </div>
+        <div className="action-row">
+          <button className="secondary-button" type="button" onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? 'Refreshing...' : 'Refresh'}
+          </button>
+          <button type="button" onClick={() => onNavigate({ name: 'product-create' })}>Create product</button>
+        </div>
+      </div>
+
+      <form className="product-search" onSubmit={handleSearch}>
+        <label>
+          Search
+          <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Name, short name, PLU, SKU or barcode" />
+        </label>
+        <label>
+          Status
+          <select value={status} onChange={(event) => setStatus(event.target.value as ProductStatus | 'all')}>
+            <option value="all">All statuses</option>
+            <option value="active">active</option>
+            <option value="inactive">inactive</option>
+            <option value="archived">archived</option>
+          </select>
+        </label>
+        <button type="submit">Search</button>
+      </form>
+
+      {isLoading && <div className="status status-loading">Loading products...</div>}
+      {errorMessage && <div className="form-error" role="alert">{errorMessage}</div>}
+      {!isLoading && !errorMessage && products.length === 0 && <div className="empty-state">No products found.</div>}
+
+      {products.length > 0 && (
+        <div className="product-table-wrap">
+          <table className="product-table">
+            <thead>
+              <tr>
+                <th>PLU</th>
+                <th>Name</th>
+                <th>Short name</th>
+                <th>SKU</th>
+                <th>Barcode</th>
+                <th>Unit</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((product) => (
+                <tr key={product.id}>
+                  <td>{product.defaultPluCode}</td>
+                  <td><strong>{product.name}</strong></td>
+                  <td>{product.shortName}</td>
+                  <td>{product.sku || '—'}</td>
+                  <td>{product.barcode || '—'}</td>
+                  <td>{product.unit}</td>
+                  <td><span className={`badge badge-${product.status}`}>{product.status}</span></td>
+                  <td>
+                    <button className="secondary-button table-action" type="button" onClick={() => onNavigate({ name: 'product-edit', productId: product.id })}>
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ProductForm({ mode, product, onCancel, onSaved }: { mode: 'create' | 'edit'; product?: Product; onCancel: () => void; onSaved: (product: Product) => void }) {
+  const [values, setValues] = useState<ProductFormValues>({
+    defaultPluCode: product?.defaultPluCode ?? '',
+    name: product?.name ?? '',
+    shortName: product?.shortName ?? '',
+    description: product?.description ?? '',
+    imageUrl: product?.imageUrl ?? '',
+    barcode: product?.barcode ?? '',
+    sku: product?.sku ?? '',
+    unit: product?.unit ?? 'kg',
+    status: product?.status ?? 'active',
+  });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<ProductWarning | null>(null);
+  const [savedProduct, setSavedProduct] = useState<Product | null>(null);
+  const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
+  const [createProduct, { isLoading: creating }] = useCreateProductMutation();
+  const [updateProduct, { isLoading: updating }] = useUpdateProductMutation();
+  const isSaving = creating || updating;
+  const existingPlacementCount = product?.activePlacementCount ?? 0;
+
+  function updateValue(field: keyof ProductFormValues, value: string) {
+    setValues((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+    setWarning(null);
+    setSavedProduct(null);
+
+    if (!values.defaultPluCode.trim() || !values.name.trim() || !values.shortName.trim() || !values.unit || !values.status) {
+      setFormError('defaultPluCode, name, shortName, unit and status are required.');
+      return;
+    }
+
+    const csrfData = csrf ?? (await refetchCsrf()).data;
+    if (!csrfData) {
+      setFormError('Не удалось подготовить защищённую форму. Повторите попытку.');
+      return;
+    }
+
+    const payload = {
+      defaultPluCode: values.defaultPluCode.trim(),
+      name: values.name.trim(),
+      shortName: values.shortName.trim(),
+      description: values.description?.trim() || undefined,
+      imageUrl: values.imageUrl?.trim() || undefined,
+      barcode: values.barcode?.trim() || undefined,
+      sku: values.sku?.trim() || undefined,
+      unit: values.unit,
+      status: values.status,
+      csrfToken: csrfData.csrfToken,
+      csrfHeaderName: csrfData.headerName,
+    };
+
+    try {
+      if (mode === 'create') {
+        const response = await createProduct(payload).unwrap();
+        onSaved(response.product);
+        return;
+      }
+
+      const response = await updateProduct({ ...payload, productId: product!.id }).unwrap();
+      if (response.warning) {
+        setSavedProduct(response.product);
+        setWarning(response.warning);
+      } else {
+        onSaved(response.product);
+      }
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Product could not be saved.';
+      setFormError(message);
+    }
+  }
+
+  return (
+    <section className="panel" aria-labelledby="product-form-title">
+      <button className="link-button" type="button" onClick={onCancel}>← Back to products</button>
+      <p className="eyebrow">{mode === 'create' ? 'Create product' : 'Edit product'}</p>
+      <h2 id="product-form-title">{mode === 'create' ? 'New product' : product?.name}</h2>
+
+      {mode === 'edit' && existingPlacementCount > 0 && (
+        <div className="status status-warning" role="status">
+          This product is used in {existingPlacementCount} active catalog placement{existingPlacementCount === 1 ? '' : 's'}. Editing it may affect catalog consumers.
+        </div>
+      )}
+      {warning && (
+        <div className="status status-warning" role="alert">
+          {warning.message} {warning.activePlacementCount ? `Active placements: ${warning.activePlacementCount}.` : ''}
+          <div className="action-row"><button type="button" onClick={() => savedProduct && onSaved(savedProduct)}>Back to products</button></div>
+        </div>
+      )}
+
+      <form className="product-form" onSubmit={handleSubmit}>
+        <div className="product-form-grid">
+          <label>PLU / defaultPluCode *<input value={values.defaultPluCode} onChange={(event) => updateValue('defaultPluCode', event.target.value)} placeholder="1001" /></label>
+          <label>Name *<input value={values.name} onChange={(event) => updateValue('name', event.target.value)} placeholder="Bananas" /></label>
+          <label>Short name *<input value={values.shortName} onChange={(event) => updateValue('shortName', event.target.value)} placeholder="Bananas" /></label>
+          <label>Unit *<select value={values.unit} onChange={(event) => updateValue('unit', event.target.value as ProductUnit)}><option value="kg">kg</option><option value="g">g</option><option value="piece">piece</option></select></label>
+          <label>Status *<select value={values.status} onChange={(event) => updateValue('status', event.target.value as ProductStatus)}><option value="active">active</option><option value="inactive">inactive</option><option value="archived">archived</option></select></label>
+          <label>SKU<input value={values.sku ?? ''} onChange={(event) => updateValue('sku', event.target.value)} placeholder="Optional SKU" /></label>
+          <label>Barcode<input value={values.barcode ?? ''} onChange={(event) => updateValue('barcode', event.target.value)} placeholder="Optional barcode" /></label>
+          <label>Image URL<input value={values.imageUrl ?? ''} onChange={(event) => updateValue('imageUrl', event.target.value)} placeholder="Optional image URL" /></label>
+        </div>
+        <label>Description<input value={values.description ?? ''} onChange={(event) => updateValue('description', event.target.value)} placeholder="Optional description" /></label>
+
+        {formError && <div className="form-error" role="alert">{formError}</div>}
+        <div className="action-row">
+          <button type="submit" disabled={isSaving}>{isSaving ? 'Saving...' : 'Save product'}</button>
+          <button className="secondary-button" type="button" onClick={onCancel}>Cancel</button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function ProductEditRoute({ productId, onNavigate }: { productId: string; onNavigate: (view: DashboardView) => void }) {
+  const { data, error, isLoading } = useGetProductQuery(productId);
+  const errorMessage = error && 'message' in error ? error.message : null;
+
+  if (isLoading) {
+    return <section className="panel"><div className="status status-loading">Loading product for editing...</div></section>;
+  }
+
+  if (errorMessage || !data?.product) {
+    return <section className="panel"><div className="form-error" role="alert">{errorMessage ?? 'Product not found.'}</div></section>;
+  }
+
+  return (
+    <ProductForm
+      mode="edit"
+      product={data.product}
+      onCancel={() => onNavigate({ name: 'products' })}
+      onSaved={() => onNavigate({ name: 'products' })}
+    />
+  );
+}
+
 function StoreForm({ mode, store, onCancel, onSaved }: { mode: 'create' | 'edit'; store?: Store; onCancel: () => void; onSaved: (store: Store) => void }) {
   const [values, setValues] = useState<StoreFormValues>({
     code: store?.code ?? '',
@@ -1342,6 +1594,18 @@ function DashboardContent({ user, view, onNavigate }: { user: AuthUser; view: Da
     return <StoresList user={user} onNavigate={onNavigate} />;
   }
 
+  if (view.name === 'products') {
+    return <ProductsPage onNavigate={onNavigate} />;
+  }
+
+  if (view.name === 'product-create') {
+    return <ProductForm mode="create" onCancel={() => onNavigate({ name: 'products' })} onSaved={() => onNavigate({ name: 'products' })} />;
+  }
+
+  if (view.name === 'product-edit') {
+    return <ProductEditRoute productId={view.productId} onNavigate={onNavigate} />;
+  }
+
   if (view.name === 'store-details') {
     return <StoreDetails user={user} storeId={view.storeId} onNavigate={onNavigate} />;
   }
@@ -1358,11 +1622,20 @@ function DashboardContent({ user, view, onNavigate }: { user: AuthUser; view: Da
 }
 
 function viewFromHash(): DashboardView {
-  return window.location.hash === '#users-access' ? { name: 'users-access' } : { name: 'overview' };
+  const hash = window.location.hash;
+  if (hash === '#users-access') return { name: 'users-access' };
+  if (hash === '#products') return { name: 'products' };
+  if (hash === '#product-create') return { name: 'product-create' };
+  if (hash.startsWith('#product-edit:')) return { name: 'product-edit', productId: hash.slice('#product-edit:'.length) };
+  return { name: 'overview' };
 }
 
 function hashFromView(view: DashboardView) {
-  return view.name === 'users-access' ? '#users-access' : '';
+  if (view.name === 'users-access') return '#users-access';
+  if (view.name === 'products') return '#products';
+  if (view.name === 'product-create') return '#product-create';
+  if (view.name === 'product-edit') return `#product-edit:${view.productId}`;
+  return '';
 }
 
 function Dashboard({ user }: { user: AuthUser }) {
