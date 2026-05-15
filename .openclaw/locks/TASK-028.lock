@@ -1,0 +1,5 @@
+TASK_ID=TASK-028
+OWNER=frontend
+STATUS=assigned
+CREATED_BY=manager
+SCOPE=Prices tab UI with table, filters, and inline store price editing.
