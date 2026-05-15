@@ -10,6 +10,15 @@ import {
   type AuthUser,
 } from './features/auth/authApi';
 import {
+  useCreateAdvertisingBannerMutation,
+  useListAdvertisingBannersQuery,
+  useReorderAdvertisingBannersMutation,
+  useUpdateAdvertisingBannerStatusMutation,
+  useUploadBannerImageMutation,
+  type AdvertisingBanner,
+  type BannerStatus,
+} from './features/advertising/advertisingApi';
+import {
   useCreateCatalogCategoryMutation,
   useCreateCatalogPlacementMutation,
   useListCatalogCategoriesQuery,
@@ -362,6 +371,7 @@ function StoreDetails({ user, storeId, onNavigate }: { user: AuthUser; storeId: 
             <div><dt>Updated</dt><dd>{new Date(store.updatedAt).toLocaleString()}</dd></div>
           </dl>
           <CatalogTab storeId={store.id} />
+          <AdvertisingTab storeId={store.id} />
           <ScaleDevicesTab storeId={store.id} userRole={user.role} currentVersionId={currentVersion?.id ?? null} />
           <PricesTab storeId={store.id} />
           <PublishingTab storeId={store.id} userRole={user.role} currentVersion={currentVersion} />
@@ -385,6 +395,219 @@ const emptyCategoryForm = (parentId = ''): CategoryFormState => ({
   status: 'active',
   parentId,
 });
+
+const bannerStatuses: BannerStatus[] = ['active', 'inactive', 'archived'];
+const supportedBannerMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const supportedBannerExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+const maxBannerImageBytes = 2 * 1024 * 1024;
+
+function AdvertisingTab({ storeId }: { storeId: string }) {
+  const { data, error, isLoading, isFetching, refetch } = useListAdvertisingBannersQuery(storeId);
+  const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
+  const [uploadBannerImage, { isLoading: uploading }] = useUploadBannerImageMutation();
+  const [createBanner, { isLoading: creating }] = useCreateAdvertisingBannerMutation();
+  const [updateStatus, { isLoading: changingStatus }] = useUpdateAdvertisingBannerStatusMutation();
+  const [reorderBanners, { isLoading: reordering }] = useReorderAdvertisingBannersMutation();
+  const [newStatus, setNewStatus] = useState<BannerStatus>('active');
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const banners = data?.banners ?? [];
+  const busy = uploading || creating || changingStatus || reordering;
+  const listError = error && 'message' in error ? error.message : null;
+
+  async function getCsrfOrThrow() {
+    const csrfData = csrf ?? (await refetchCsrf()).data;
+    if (!csrfData) {
+      throw new Error('Не удалось подготовить защищённое действие. Повторите попытку.');
+    }
+    return csrfData;
+  }
+
+  function validateBannerFile(file: File): string | null {
+    const filename = file.name.toLowerCase();
+    const hasSupportedExtension = supportedBannerExtensions.some((extension) => filename.endsWith(extension));
+    const hasSupportedMimeType = file.type === '' || supportedBannerMimeTypes.has(file.type);
+
+    if (!hasSupportedExtension || !hasSupportedMimeType) {
+      return 'Unsupported banner format. Upload JPG, PNG or WebP.';
+    }
+
+    if (file.size > maxBannerImageBytes) {
+      return 'Banner image is too large. Upload an image up to 2 MB.';
+    }
+
+    return null;
+  }
+
+  async function handleBannerUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    setActionError(null);
+    setActionNotice(null);
+
+    if (!file) {
+      return;
+    }
+
+    const validationError = validateBannerFile(file);
+    if (validationError) {
+      setActionError(validationError);
+      return;
+    }
+
+    try {
+      const csrfData = await getCsrfOrThrow();
+      const uploadResponse = await uploadBannerImage({
+        file,
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      await createBanner({
+        storeId,
+        imageUrl: uploadResponse.fileAsset.publicUrl,
+        imageFileAssetId: uploadResponse.fileAsset.id,
+        status: newStatus,
+        sortOrder: banners.length,
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setActionNotice('Banner uploaded and added. Publish a new catalog version to send this change to scales.');
+    } catch (uploadError) {
+      setActionError(errorMessageFromUnknown(uploadError, 'Banner could not be uploaded.'));
+    }
+  }
+
+  async function handleStatusChange(banner: AdvertisingBanner, status: BannerStatus) {
+    if (banner.status === status) {
+      return;
+    }
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const csrfData = await getCsrfOrThrow();
+      await updateStatus({
+        storeId,
+        bannerId: banner.id,
+        status,
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setActionNotice('Banner status changed. Publish a new catalog version to send this change to scales.');
+    } catch (statusError) {
+      setActionError(errorMessageFromUnknown(statusError, 'Banner status could not be changed.'));
+    }
+  }
+
+  async function moveBanner(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= banners.length) {
+      return;
+    }
+
+    const orderedIds = banners.map((banner) => banner.id);
+    [orderedIds[index], orderedIds[targetIndex]] = [orderedIds[targetIndex], orderedIds[index]];
+    setActionError(null);
+    setActionNotice(null);
+
+    try {
+      const csrfData = await getCsrfOrThrow();
+      await reorderBanners({
+        storeId,
+        bannerIds: orderedIds,
+        csrfToken: csrfData.csrfToken,
+        csrfHeaderName: csrfData.headerName,
+      }).unwrap();
+      setActionNotice('Banner order changed. Publish a new catalog version to send this change to scales.');
+    } catch (reorderError) {
+      setActionError(errorMessageFromUnknown(reorderError, 'Banner order could not be changed.'));
+    }
+  }
+
+  return (
+    <section className="advertising-tab" aria-labelledby="advertising-title">
+      <div className="panel-heading advertising-heading">
+        <div>
+          <p className="eyebrow">Advertising tab</p>
+          <h3 id="advertising-title">Advertising banners</h3>
+          <p className="muted">Upload JPG, PNG or WebP banners up to 2 MB.</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? 'Refreshing...' : 'Refresh banners'}
+        </button>
+      </div>
+
+      <div className="status status-warning publication-required" role="note">
+        Banner uploads, status changes and order changes require a new catalog publication before scales receive them.
+      </div>
+
+      {listError && <div className="form-error" role="alert">{listError}</div>}
+      {actionError && <div className="form-error" role="alert">{actionError}</div>}
+      {actionNotice && <div className="status status-ok">{actionNotice}</div>}
+      {isLoading && <div className="status status-loading">Loading advertising banners...</div>}
+
+      <div className="banner-upload-card">
+        <label>
+          New banner status
+          <select value={newStatus} onChange={(event) => setNewStatus(event.target.value as BannerStatus)} disabled={busy}>
+            {bannerStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+          </select>
+        </label>
+        <label>
+          Upload banner image
+          <input accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={handleBannerUpload} type="file" />
+        </label>
+      </div>
+
+      {!isLoading && banners.length === 0 && <div className="empty-state">No advertising banners yet.</div>}
+
+      {banners.length > 0 && (
+        <div className="banner-table-wrap">
+          <table className="banner-table">
+            <thead>
+              <tr>
+                <th>Preview</th>
+                <th>Status</th>
+                <th>Order</th>
+                <th>Updated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {banners.map((banner, index) => (
+                <tr key={banner.id}>
+                  <td>
+                    <div className="banner-preview">
+                      <img src={banner.imageUrl} alt="Advertising banner preview" />
+                      <small>{banner.imageUrl}</small>
+                    </div>
+                  </td>
+                  <td>
+                    <select
+                      aria-label={`Status for banner ${banner.id}`}
+                      value={banner.status}
+                      onChange={(event) => handleStatusChange(banner, event.target.value as BannerStatus)}
+                      disabled={busy}
+                    >
+                      {bannerStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                    </select>
+                  </td>
+                  <td>#{banner.sortOrder}</td>
+                  <td>{new Date(banner.updatedAt).toLocaleString()}</td>
+                  <td>
+                    <div className="table-actions">
+                      <button className="secondary-button table-action" type="button" disabled={busy || index === 0} onClick={() => moveBanner(index, -1)}>Move up</button>
+                      <button className="secondary-button table-action" type="button" disabled={busy || index === banners.length - 1} onClick={() => moveBanner(index, 1)}>Move down</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
 
 function CatalogTab({ storeId }: { storeId: string }) {
   const { data, error, isLoading, isFetching, refetch } = useListCatalogCategoriesQuery(storeId);

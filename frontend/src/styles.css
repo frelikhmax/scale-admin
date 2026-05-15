@@ -1235,3 +1235,91 @@ select:focus {
     width: 100%;
   }
 }
+
+.advertising-tab {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #dce4f3;
+}
+
+.advertising-heading h3 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.advertising-tab .status,
+.advertising-tab .form-error,
+.publication-required {
+  margin-bottom: 1rem;
+}
+
+.banner-upload-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.6fr) minmax(240px, 1fr);
+  gap: 1rem;
+  align-items: end;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid #dce4f3;
+  border-radius: 18px;
+  background: #fbfdff;
+}
+
+.banner-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #dce4f3;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.banner-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+}
+
+.banner-table th,
+.banner-table td {
+  padding: 0.85rem;
+  border-bottom: 1px solid #e8eef8;
+  text-align: left;
+  vertical-align: top;
+}
+
+.banner-table th {
+  color: #50617f;
+  background: #f8faff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.banner-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.banner-preview {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.banner-preview img {
+  width: 180px;
+  height: 72px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #eef3fb;
+}
+
+.banner-preview small {
+  max-width: 260px;
+  overflow-wrap: anywhere;
+  color: #6b778d;
+}
+
+@media (max-width: 800px) {
+  .banner-upload-card {
+    grid-template-columns: 1fr;
+  }
+}
