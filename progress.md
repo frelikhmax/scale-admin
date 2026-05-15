@@ -1652,3 +1652,33 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-045`.
+
+
+## 2026-05-15T19:02:10+02:00 — TASK-046 — production Docker Compose and deployment notes
+
+Status: done
+Owner: backend (manager-bound subagent)
+Summary:
+- Added production-oriented Docker Compose configuration for PostgreSQL, backend and frontend with persistent uploaded-files volume mounted at `/app/uploads`.
+- Added `FILE_UPLOAD_DIR` to the backend env example and documented production environment requirements without real secrets.
+- Documented local uploaded-file serving via `/uploads/`, PostgreSQL dump commands, uploaded-files backup/copy commands and HTTPS/TLS reverse proxy requirement for production cookies.
+- Manager inspected scope and confirmed changes are limited to TASK-046 infrastructure/docs files.
+- Marked TASK-046 `status` as `done` after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: `53074c9 TASK-046 add production deployment compose notes`.
+- Changed files inspected: `docker-compose.yml`, `backend/.env.example`, `README.md`, `docs/deployment.md`.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Backend build: `npm --prefix backend run build` passed.
+- Frontend build: `npm --prefix frontend run build` passed.
+- Prisma validate: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Focused source/docs check: `TASK_046_FOCUSED_SOURCE_DOCS_CHECK=PASS`.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-046` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- Docker verification ignored `docker-compose.override.yml` as required by workflow.
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-046`.
