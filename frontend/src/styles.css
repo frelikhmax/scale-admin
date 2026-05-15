@@ -992,6 +992,45 @@ select:focus {
   gap: 1rem;
 }
 
+.product-image-upload {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #dce4f3;
+  border-radius: 18px;
+  background: #fbfdff;
+}
+
+.product-image-upload .status,
+.product-image-upload .form-error {
+  padding: 0.75rem;
+}
+
+.product-image-preview {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid #dce4f3;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.product-image-preview img {
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #eef3fb;
+}
+
+.product-image-preview small {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: #6b778d;
+}
+
 .status-warning {
   color: #7a4d00;
   border-color: #ffd47a;

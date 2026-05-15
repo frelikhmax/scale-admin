@@ -21,6 +21,18 @@ export type Product = {
   updatedAt: string;
 };
 
+export type FileAsset = {
+  id: string;
+  originalFileName: string;
+  storedFilename: string;
+  storagePath: string;
+  publicUrl: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedByUserId: string;
+  createdAt: string;
+};
+
 export type ProductWarning = {
   code: string;
   message: string;
@@ -33,6 +45,7 @@ export type ProductFormValues = {
   shortName: string;
   description?: string;
   imageUrl?: string;
+  imageFileAssetId?: string;
   barcode?: string;
   sku?: string;
   unit: ProductUnit;
@@ -53,6 +66,12 @@ type WriteProductRequest = ProductFormValues & {
 
 type UpdateProductRequest = ProductFormValues & {
   productId: string;
+  csrfToken: string;
+  csrfHeaderName: string;
+};
+
+type UploadProductImageRequest = {
+  file: File;
   csrfToken: string;
   csrfHeaderName: string;
 };
@@ -99,6 +118,19 @@ export const productsApi = backendApi.injectEndpoints({
         { type: 'Products', id: 'LIST' },
       ],
     }),
+    uploadProductImage: builder.mutation<{ fileAsset: FileAsset }, UploadProductImageRequest>({
+      query: ({ file, csrfToken, csrfHeaderName }) => {
+        const body = new FormData();
+        body.append('file', file);
+
+        return {
+          url: '/files/images',
+          method: 'POST',
+          headers: { [csrfHeaderName]: csrfToken },
+          body,
+        };
+      },
+    }),
   }),
 });
 
@@ -107,4 +139,5 @@ export const {
   useGetProductQuery,
   useCreateProductMutation,
   useUpdateProductMutation,
+  useUploadProductImageMutation,
 } = productsApi;
