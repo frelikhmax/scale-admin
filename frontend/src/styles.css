@@ -1008,3 +1008,145 @@ select:focus {
     width: 100%;
   }
 }
+
+.catalog-tab {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #dce4f3;
+}
+
+.catalog-heading h3 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.catalog-summary,
+.category-card {
+  padding: 1rem;
+  border: 1px solid #dce4f3;
+  border-radius: 18px;
+  background: #fbfdff;
+}
+
+.catalog-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.status-warning {
+  color: #78520d;
+  border-color: #f4d48a;
+  background: #fff9e8;
+}
+
+.category-archive-warning,
+.catalog-tab .status,
+.catalog-tab .form-error {
+  margin-bottom: 1rem;
+}
+
+.category-form,
+.category-edit-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.category-root-form,
+.category-child-form {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid #dce4f3;
+  border-radius: 18px;
+  background: #f8faff;
+}
+
+.category-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.category-fields:has(label:nth-child(4)) {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.category-form button,
+.category-edit-form button {
+  margin-top: 0;
+}
+
+.category-tree {
+  margin-top: 1rem;
+}
+
+.category-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.category-list .category-list {
+  margin-top: 0.75rem;
+  padding-left: 1.25rem;
+  border-left: 2px solid #dce4f3;
+}
+
+.category-card-archived {
+  background: #f4f6fa;
+}
+
+.category-card-main {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.category-title-row,
+.category-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.category-actions {
+  justify-content: flex-end;
+}
+
+.category-actions button {
+  margin-top: 0;
+}
+
+.category-card small,
+.catalog-summary code {
+  color: #38445c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+
+@media (max-width: 900px) {
+  .category-fields,
+  .category-fields:has(label:nth-child(4)) {
+    grid-template-columns: 1fr;
+  }
+
+  .category-card-main {
+    display: grid;
+  }
+
+  .category-actions {
+    justify-content: stretch;
+  }
+
+  .category-actions button,
+  .category-form button,
+  .category-edit-form button {
+    width: 100%;
+  }
+}
