@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { CategoryStatus, PlacementStatus, Prisma, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../logs/audit-log.service';
 
 export type RequestContext = {
   ipAddress?: string;
@@ -107,7 +108,10 @@ const MAX_CATEGORY_DEPTH = 3;
 
 @Injectable()
 export class CatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogs: AuditLogService,
+  ) {}
 
   async listCategoryTree(storeId: string) {
     const catalog = await this.findActiveCatalog(storeId);
@@ -142,7 +146,7 @@ export class CatalogService {
 
     const created = await this.prisma.$transaction(async (tx) => {
       const category = await tx.category.create({ data });
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'category.created',
@@ -221,7 +225,7 @@ export class CatalogService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.category.update({ where: { catalogId_id: { catalogId: catalog.id, id: category.id } }, data });
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action,
@@ -290,7 +294,7 @@ export class CatalogService {
       });
       updated.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'category.reordered',
@@ -368,7 +372,7 @@ export class CatalogService {
 
     const placement = await this.prisma.$transaction(async (tx) => {
       const created = await tx.catalogProductPlacement.create({ data });
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'placement.created',
@@ -444,7 +448,7 @@ export class CatalogService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.catalogProductPlacement.update({ where: { id: placement.id }, data });
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action,
@@ -511,7 +515,7 @@ export class CatalogService {
       });
       updated.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'placement.reordered',

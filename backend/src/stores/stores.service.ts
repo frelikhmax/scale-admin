@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../logs/audit-log.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
 
 export type RequestContext = {
@@ -31,7 +32,10 @@ type StoreRecord = {
 
 @Injectable()
 export class StoresService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogs: AuditLogService,
+  ) {}
 
   async listVisibleStores(user: AuthenticatedUser) {
     const stores = await this.prisma.store.findMany({
@@ -163,7 +167,7 @@ export class StoresService {
               })
             : null;
 
-        await tx.auditLog.create({
+        await this.auditLogs.create(tx, {
           data: {
             actorUserId,
             action: 'store.created',
@@ -240,7 +244,7 @@ export class StoresService {
           data,
         });
 
-        await tx.auditLog.create({
+        await this.auditLogs.create(tx, {
           data: {
             actorUserId,
             action: 'store.updated',

@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../logs/audit-log.service';
 import { AuthService } from '../auth/auth.service';
 
 export type RequestContext = {
@@ -27,6 +28,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
+    private readonly auditLogs: AuditLogService,
   ) {}
 
   async listUsers(includeDeleted = false) {
@@ -58,7 +60,7 @@ export class UsersService {
         data: { role },
       });
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'user.role_changed',
@@ -91,7 +93,7 @@ export class UsersService {
         data: { status: 'blocked' },
       });
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'user.blocked',
@@ -124,7 +126,7 @@ export class UsersService {
         data: { status: 'active' },
       });
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'user.unblocked',
@@ -190,7 +192,7 @@ export class UsersService {
         include: { store: true, grantedBy: true },
       });
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'user_store_access.granted',
@@ -251,7 +253,7 @@ export class UsersService {
         include: { store: true, grantedBy: true },
       });
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'user_store_access.revoked',
@@ -302,7 +304,7 @@ export class UsersService {
         data: { deletedAt: now },
       });
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'user.soft_deleted',

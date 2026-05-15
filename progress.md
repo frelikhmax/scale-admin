@@ -1273,3 +1273,28 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run scripts/openclaw-after-task-check.sh TASK-036.
+
+## 2026-05-15T12:01:00+02:00 — TASK-041 — centralized AuditLog service
+
+Status: done
+Owner: backend
+Summary:
+- Added centralized backend AuditLogService with recursive redaction for password/session/reset/invite/api token fields and inline token-like strings.
+- Routed backend AuditLog writes through the centralized service.
+- Added/verified audit events for successful and failed login plus products, prices, publishing, scale token regeneration and existing domain events.
+- Confirmed AuditLog has no public mutable endpoint and system/device actions can use actorUserId null.
+- Marked TASK-041 status as done after manager verification and Docker verification passed.
+
+Evidence:
+- Implementation commit inspected: abf5803 TASK-041 centralize audit logging.
+- Backend build: cd backend && npm run build passed.
+- Prisma validation: cd backend && npx prisma validate --schema prisma/schema.prisma passed.
+- Focused static audit verification: FOCUSED_AUDIT_STATIC_CHECK=PASS.
+- Docker verification: scripts/openclaw-docker-verify.sh TASK-041 returned DOCKER_VERIFY_RESULT=PASS.
+
+Notes:
+- Docker verification emitted a non-blocking warning: Compose is configured to build using Bake, but buildx is not installed.
+- Runtime .openclaw/locks/, .openclaw/handoffs/, and .openclaw/runtime-audit/ artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run scripts/openclaw-after-task-check.sh TASK-041.

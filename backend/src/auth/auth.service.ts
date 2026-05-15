@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../logs/audit-log.service';
 import type { AppConfiguration } from '../config/app.config';
 import { hashPassword, verifyPassword } from './password.util';
 import { createSessionToken, hashSessionToken } from './session-token.util';
@@ -52,6 +53,7 @@ export class AuthService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly auditLogs: AuditLogService,
     configService: ConfigService,
   ) {
     this.appConfig = configService.getOrThrow<AppConfiguration>('app');
@@ -81,6 +83,7 @@ export class AuthService {
   async login(email: string, password: string, context: RequestContext) {
     const normalizedEmail = this.normalizeEmail(email);
     if (!normalizedEmail || typeof password !== 'string' || password.length === 0) {
+      await this.logLoginAttempt(null, normalizedEmail, false, 'invalid_request', context);
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -95,17 +98,20 @@ export class AuthService {
     });
 
     if (!user || user.status !== 'active' || !user.credential) {
+      await this.logLoginAttempt(null, normalizedEmail, false, 'invalid_credentials', context);
       throw new UnauthorizedException('Invalid email or password');
     }
 
     const now = new Date();
     if (user.credential.lockedUntil && user.credential.lockedUntil > now) {
+      await this.logLoginAttempt(user.id, normalizedEmail, false, 'locked', context);
       this.throwLoginThrottled(user.credential.lockedUntil);
     }
 
     const passwordValid = verifyPassword(password, user.credential);
     if (!passwordValid) {
       await this.recordFailedLogin(user.id, user.credential, now);
+      await this.logLoginAttempt(user.id, normalizedEmail, false, 'invalid_credentials', context);
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -113,20 +119,20 @@ export class AuthService {
     const sessionTokenHash = hashSessionToken(sessionToken);
     const expiresAt = new Date(now.getTime() + this.absoluteTimeoutMs);
 
-    await this.prisma.$transaction([
-      this.prisma.userCredential.update({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userCredential.update({
         where: { userId: user.id },
         data: {
           failedLoginCount: 0,
           lastFailedLoginAt: null,
           lockedUntil: null,
         },
-      }),
-      this.prisma.user.update({
+      });
+      await tx.user.update({
         where: { id: user.id },
         data: { lastLoginAt: now },
-      }),
-      this.prisma.userSession.create({
+      });
+      const session = await tx.userSession.create({
         data: {
           userId: user.id,
           sessionTokenHash,
@@ -136,8 +142,25 @@ export class AuthService {
           ipAddress: context.ipAddress,
           userAgent: context.userAgent,
         },
-      }),
-    ]);
+      });
+      await this.auditLogs.create(tx, {
+        data: {
+          actorUserId: user.id,
+          action: 'auth.login_succeeded',
+          entityType: 'UserSession',
+          entityId: session.id,
+          afterData: {
+            userId: user.id,
+            expiresAt: expiresAt.toISOString(),
+          },
+          metadata: {
+            emailNormalized: normalizedEmail,
+          },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        },
+      });
+    });
 
     return {
       sessionToken,
@@ -146,6 +169,32 @@ export class AuthService {
       user: this.toSafeUser(user),
       expiresAt,
     };
+  }
+
+  private async logLoginAttempt(
+    actorUserId: string | null,
+    emailNormalized: string,
+    success: boolean,
+    reason: string,
+    context: RequestContext,
+  ) {
+    await this.auditLogs.create({
+      data: {
+        actorUserId,
+        action: success ? 'auth.login_succeeded' : 'auth.login_failed',
+        entityType: 'AuthLogin',
+        entityId: actorUserId ?? null,
+        afterData: {
+          success,
+        },
+        metadata: {
+          emailNormalized: emailNormalized || null,
+          reason,
+        },
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      },
+    });
   }
 
   async getCurrentSession(sessionToken: string | undefined) {
@@ -241,7 +290,7 @@ export class AuthService {
         },
       });
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'user_invite.created',
@@ -334,7 +383,7 @@ export class AuthService {
         },
       });
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId: user.id,
           action: 'user_invite.accepted',
@@ -402,7 +451,7 @@ export class AuthService {
         },
       });
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId: user.id,
           action: 'password_reset.requested',
@@ -490,7 +539,7 @@ export class AuthService {
         },
       });
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId: resetToken.userId,
           action: 'password_reset.completed',

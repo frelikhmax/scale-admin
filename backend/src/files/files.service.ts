@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { mkdir, unlink, writeFile } from 'fs/promises';
 import { extname, join, relative } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../logs/audit-log.service';
 
 const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024;
 const IMAGE_UPLOAD_PUBLIC_PREFIX = '/uploads/images';
@@ -28,7 +29,10 @@ type DetectedImageType = {
 export class FilesService {
   private readonly imageUploadDirectory: string;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogs: AuditLogService,
+  ) {
     const uploadRoot = process.env.FILE_UPLOAD_DIR || join(process.cwd(), 'uploads');
     this.imageUploadDirectory = join(uploadRoot, 'images');
   }
@@ -79,7 +83,7 @@ export class FilesService {
           },
         });
 
-        await tx.auditLog.create({
+        await this.auditLogs.create(tx, {
           data: {
             actorUserId,
             action: 'file.uploaded',

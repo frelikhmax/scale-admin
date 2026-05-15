@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type ScaleSyncStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../logs/audit-log.service';
 import { createScaleApiToken, hashScaleApiToken, verifyScaleApiTokenHash } from './scale-token.util';
 
 export type RequestContext = {
@@ -54,7 +55,10 @@ type ScaleDeviceRecord = {
 
 @Injectable()
 export class ScalesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogs: AuditLogService,
+  ) {}
 
   async registerDevice(storeId: string, input: CreateScaleDeviceInput, actorUserId: string, context: RequestContext) {
     const store = await this.findStoreById(storeId);
@@ -79,7 +83,7 @@ export class ScalesService {
           },
         });
 
-        await tx.auditLog.create({
+        await this.auditLogs.create(tx, {
           data: {
             actorUserId,
             action: 'scale_device.created',
@@ -133,7 +137,7 @@ export class ScalesService {
         data: { status },
       });
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'scale_device.status_changed',
@@ -164,7 +168,7 @@ export class ScalesService {
         data: { apiTokenHash },
       });
 
-      await tx.auditLog.create({
+      await this.auditLogs.create(tx, {
         data: {
           actorUserId,
           action: 'scale_device.api_token_regenerated',
@@ -359,7 +363,7 @@ export class ScalesService {
       });
 
       if (status === 'success') {
-        await tx.auditLog.create({
+        await this.auditLogs.create(tx, {
           data: {
             actorUserId: null,
             action: 'scale_device.catalog_version_acknowledged',
