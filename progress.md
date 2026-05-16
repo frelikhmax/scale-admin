@@ -1682,3 +1682,33 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-046`.
+
+## 2026-05-16 13:02 — TASK-047 — BUG-001 production invite token response fix
+
+Status: done
+Owner: backend (manager-bound subagent)
+Summary:
+- Updated create-invite response handling so production responses include invite metadata but omit the top-level plain invite token.
+- Kept non-production create-invite token return for local/manual testing, matching the existing password-reset production pattern.
+- Updated Users & Access invite UI/types to tolerate absent `response.token` and show a safe production success message.
+- Updated BUG-001 status to Fixed after focused verification.
+- Manager inspected scope and confirmed changes are limited to allowed TASK-047 source/docs/progress files.
+
+Evidence:
+- Implementation commit inspected: `f549f29 fix: hide production invite token response`.
+- Changed files inspected: `backend/src/auth/auth.service.ts`, `frontend/src/features/users/usersApi.ts`, `frontend/src/main.tsx`, `docs/bugs/BUG-001.md`, `progress.md`.
+- Whitespace check: `git diff --check main...HEAD` passed.
+- Backend build: `npm --prefix backend run build` passed.
+- Frontend build: `npm --prefix frontend run build` passed.
+- Prisma validate: `cd backend && npx prisma validate --schema prisma/schema.prisma` passed.
+- Focused manager source check returned `TASK_047_MANAGER_SOURCE_CHECK=PASS`.
+- Focused production response shape check passed: response keys are `["invite"]`; invite keys are `["acceptedAt","createdAt","email","expiresAt","id","role"]`; token-equivalent top-level keys found: `[]`.
+- Docker verification: `scripts/openclaw-docker-verify.sh TASK-047` returned `DOCKER_VERIFY_RESULT=PASS`.
+
+Notes:
+- `scripts/openclaw-preflight.sh` is limited for this explicit post-UAT task because TASK-047 is not in historical `tasks.json` and the workflow-required TASK-047 lock/task branch makes the script report failures. Historical TASK-001..TASK-046 statuses were not edited.
+- Live HTTP admin create-invite shape check could not authenticate with example seed credentials against the current Docker database; no production secrets were read or printed. Verification used Docker build/start plus focused source/service response-shape evidence.
+- Runtime `.openclaw/locks/`, `.openclaw/handoffs/`, and `.openclaw/runtime-audit/` artifacts were kept uncommitted.
+
+Next:
+- Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-047` if supported; otherwise record the post-UAT gate limitation.
