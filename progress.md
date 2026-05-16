@@ -1682,3 +1682,21 @@ Notes:
 
 Next:
 - Merge task branch to main, push main and task branch, remove runtime lock, then run `scripts/openclaw-after-task-check.sh TASK-046`.
+
+## 2026-05-16 13:02 — TASK-047 — BUG-001 production invite token response fix
+
+Status: implemented, pending manager review
+Owner: backend
+Summary:
+- Updated create-invite response handling so production responses include invite metadata but omit the top-level plain invite token.
+- Kept non-production create-invite token return for local/manual testing, matching the existing password-reset production pattern.
+- Updated Users & Access invite UI/types to tolerate absent `response.token` and show a safe production success message.
+- Updated BUG-001 status to Fixed after focused verification.
+
+Evidence:
+- Backend build passed.
+- Frontend build passed.
+- Focused production response shape check passed: response keys are `["invite"]`; invite keys are `["acceptedAt","createdAt","email","expiresAt","id","role"]`; token-equivalent top-level keys found: `[]`.
+
+Next:
+- Manager reviews TASK-047 implementation and verification evidence.

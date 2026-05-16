@@ -321,7 +321,7 @@ export class AuthService {
         acceptedAt: invite.acceptedAt?.toISOString() ?? null,
         createdAt: invite.createdAt.toISOString(),
       },
-      token,
+      ...(this.appConfig.nodeEnv === 'production' ? {} : { token }),
     };
   }
 

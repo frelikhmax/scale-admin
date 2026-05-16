@@ -2479,7 +2479,7 @@ function InviteForm() {
   const [role, setRole] = useState<AuthUser['role']>('operator');
   const [expiresAt, setExpiresAt] = useState(getDefaultInviteExpiry());
   const [formError, setFormError] = useState<string | null>(null);
-  const [createdInvite, setCreatedInvite] = useState<{ email: string; token: string; expiresAt: string } | null>(null);
+  const [createdInvite, setCreatedInvite] = useState<{ email: string; token?: string; expiresAt: string } | null>(null);
   const { data: csrf, refetch: refetchCsrf } = useGetCsrfTokenQuery();
   const [createInvite, { isLoading }] = useCreateInviteMutation();
 
@@ -2535,7 +2535,11 @@ function InviteForm() {
       {createdInvite && (
         <div className="status status-ok" role="status">
           Invite for <strong>{createdInvite.email}</strong> expires {formatDateTime(createdInvite.expiresAt)}.<br />
-          Token: <code>{createdInvite.token}</code>
+          {createdInvite.token ? (
+            <>Token: <code>{createdInvite.token}</code></>
+          ) : (
+            'Invite created. The invite token is not shown in production.'
+          )}
         </div>
       )}
       <button type="submit" disabled={isLoading}>{isLoading ? 'Creating invite...' : 'Create invite'}</button>
